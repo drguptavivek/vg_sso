@@ -1,0 +1,58 @@
+.kcadm.config
+.kcadm.realm.config
+.env
+keycloak-[0-9]*/
+keycloak-*.tar.gz
+keycloak-current
+/exports/
+backups/
+keycloak-custom/themes/
+keycloak-custom/providers/*.jar
+tmp/
+tmp/*
+tmp/**/*
+tmp/**/**/*
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Local proprietary branding assets (kept out of git)
+.local/**
+!.local/brand-assets/
+!.local/brand-assets/.gitkeep
+assets_local/
+
+# Theme binary assets (keep local; prevent accidental branding leakage)
+theme/**/favicon.ico
+theme/**/favicon-v2.ico
+theme/**/icon.svg
+theme/**/resources/icon.svg
+theme/**/resources/img/logo.png
+theme/**/resources/img/green_logo.png
+theme/**/resources/img/background.png
+theme/**/resources/img/favicon.ico
+theme/**/account/resources/img/logo.png
+theme/**/login/resources/img/logo.png
+theme/**/login/resources/img/background.png
+
+.kcadm.master.config
+.kcadm.realm.config
+
+# Maven build artifacts
+**/target/
+.m2/
+*.log
+logs/keycloak/*
+!logs/keycloak/.gitkeep
+logs/*
+
+
+# Coverage reports in tests directory
+tests/spi_coverage/
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
+.beads/dolt-monitor.pid
+.beads/dolt-server.activity
+.beads/dolt-server.port

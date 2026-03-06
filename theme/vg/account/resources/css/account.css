@@ -1,0 +1,48 @@
+/* Account Console logo override */
+.pf-v5-c-masthead__brand,
+.pf-c-masthead__brand {
+  position: relative;
+  width: 220px;
+  height: 56px;
+  overflow: hidden;
+  min-width: 220px;
+}
+
+.pf-v5-c-masthead__brand a,
+.pf-c-masthead__brand a {
+  position: relative;
+  display: block;
+  width: 220px;
+  height: 56px;
+  overflow: hidden;
+  text-indent: -9999px;
+  white-space: nowrap;
+  font-size: 0;
+  line-height: 0;
+}
+
+.pf-v5-c-masthead__brand img,
+.pf-c-masthead__brand img,
+.pf-v5-c-masthead__brand svg,
+.pf-c-masthead__brand svg,
+.pf-v5-c-masthead__brand a > *,
+.pf-c-masthead__brand a > * {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+.pf-v5-c-masthead__brand::after,
+.pf-c-masthead__brand::after,
+.pf-v5-c-masthead__brand a::after,
+.pf-c-masthead__brand a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 220px;
+  height: 56px;
+  background: url("../img/logo.png") left center / contain no-repeat;
+  pointer-events: none;
+  opacity: 1;
+  z-index: 3;
+}

@@ -1,0 +1,14 @@
+.git
+.gitmodules
+.env
+.kcadm.config
+.kcadm.master.config
+.kcadm.realm.config
+agentic_kb
+backups
+exports
+tmp
+keycloak-*.tar.gz
+keycloak-26.5.3
+keycloak-26.5.4
+keycloak-current

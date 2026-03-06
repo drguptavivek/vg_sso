@@ -1,0 +1,78 @@
+[
+  {
+    "name": "baseline-group",
+    "path": "/baseline-group",
+    "attributes": {},
+    "subGroups": []
+  },
+  {
+    "name": "Departments",
+    "path": "/Departments",
+    "attributes": {},
+    "subGroups": [
+      {
+        "name": "General Medicine",
+        "path": "/Departments/General Medicine",
+        "attributes": {
+          "dept_id": ["1001"],
+          "dept_code": ["GEN-MED"]
+        },
+        "subGroups": []
+      },
+      {
+        "name": "General Surgery",
+        "path": "/Departments/General Surgery",
+        "attributes": {
+          "dept_id": ["1002"],
+          "dept_code": ["GEN-SURG"]
+        },
+        "subGroups": []
+      }
+    ]
+  },
+  {
+    "name": "IT Roles",
+    "path": "/IT Roles",
+    "attributes": {},
+    "subGroups": [
+      {
+        "name": "app-admins",
+        "path": "/IT Roles/app-admins",
+        "attributes": {},
+        "subGroups": [
+          {
+            "name": "example-client",
+            "path": "/IT Roles/app-admins/example-client",
+            "attributes": {},
+            "subGroups": []
+          }
+        ]
+      },
+      {
+        "name": "sso_user_manager",
+        "path": "/IT Roles/sso_user_manager",
+        "attributes": {},
+        "subGroups": []
+      }
+    ]
+  },
+  {
+    "name": "User Type",
+    "path": "/User Type",
+    "attributes": {},
+    "subGroups": [
+      {
+        "name": "faculty",
+        "path": "/User Type/faculty",
+        "attributes": {},
+        "subGroups": []
+      },
+      {
+        "name": "resident",
+        "path": "/User Type/resident",
+        "attributes": {},
+        "subGroups": []
+      }
+    ]
+  }
+]

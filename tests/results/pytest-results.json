@@ -1,0 +1,286 @@
+{
+  "generated_at": "2026-03-01T17:53:34Z",
+  "exit_status": 1,
+  "summary": {
+    "total": 39,
+    "passed": 35,
+    "failed": 3,
+    "skipped": 1,
+    "duration_seconds": 10.67
+  },
+  "tests": [
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_admin_users_exist",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.007,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_base_compose_runtime_contract",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.009,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_bootstrap_admin_is_retired",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.0,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_client_hardening_matches_step_scripts",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.0,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_default_scopes_and_custom_scope_mappers_exist",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.009,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_events_and_required_actions_are_enabled",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.0,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_expected_groups_are_present_with_expected_attributes",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.347,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_expected_singletons_for_roles_and_client_scopes",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.007,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_group_membership_scenarios_are_reflected_in_tokens",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 2.066,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_invalid_custom_user_profile_attributes_are_rejected",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.022,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_master_admin_has_master_api_access",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.0,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_master_admin_has_realm_admin_role",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.004,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_master_realm_themes_are_applied",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.0,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_nginx_proxy_reverse_proxy_controls",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.116,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_otp_admin_api_functionality",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.558,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_password_policy_and_session_timeouts",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.0,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_production_nginx_configs_contain_expected_hardening",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.002,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_realm_admin_has_realm_management_role",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.036,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_realm_exists_and_themes_are_applied",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.0,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_realm_login_and_bruteforce_baseline",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.0,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_scope_and_mapper_names_are_unique",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.008,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step2_fine_grained_admin_permissions_enforcement",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.844,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step4_authentication_flow_structure",
+      "outcome": "failed",
+      "when": "call",
+      "duration": 0.015,
+      "longrepr": "self = <test_live_config.LiveConfigValidationTests testMethod=test_step4_authentication_flow_structure>\n\n    def test_step4_authentication_flow_structure(self) -> None:\n        # 1. Verify browser-PhoneOTP is the active flow\n        self.assertEqual(self.realm_data[\"browserFlow\"], \"browser-PhoneOTP\")\n    \n        # 2. Verify top-level copied browser flow structure.\n        executions = self.client.get(f\"/admin/realms/{self.realm}/authentication/flows/browser-PhoneOTP/executions\")\n        top_level = sorted([e for e in executions if e.get(\"level\") == 0], key=lambda x: x.get(\"index\", 99))\n    \n        top_level_names = [item.get(\"providerId\") or item.get(\"displayName\") for item in top_level]\n        self.assertEqual(\n            top_level_names,\n            [\n                \"auth-cookie\",\n                \"auth-spnego\",\n                \"identity-provider-redirector\",\n                \"browser-PhoneOTP Organization\",\n                \"browser-PhoneOTP forms\",\n            ],\n        )\n        self.assertEqual([item[\"index\"] for item in top_level], [0, 1, 2, 3, 4])\n        self.assertEqual([item[\"priority\"] for item in top_level], [10, 20, 25, 26, 30])\n        self.assertEqual(\n            [item[\"requirement\"] for item in top_level],\n            [\"ALTERNATIVE\", \"DISABLED\", \"ALTERNATIVE\", \"ALTERNATIVE\", \"ALTERNATIVE\"],\n        )\n    \n        forms_subflow = next((e for e in executions if e.get(\"authenticationFlow\") and \"forms\" in (e.get(\"displayName\") or \"\").lower()), None)\n        self.assertIsNotNone(forms_subflow, \"Forms subflow not found in browser-PhoneOTP\")\n    \n        # 3. Verify forms subflow direct children in the desired custom order.\n        forms_execs = self.client.get(\n            f\"/admin/realms/{self.realm}/authentication/flows/{urllib.parse.quote(forms_subflow['displayName'], safe='')}/executions\"\n        )\n        forms_top = sorted([e for e in forms_execs if e.get(\"level\") == 0], key=lambda x: x.get(\"index\", 99))\n        forms_names = [item.get(\"providerId\") or item.get(\"displayName\") for item in forms_top]\n>       self.assertEqual(\n            forms_names,\n            [\n                \"auth-username-password-form\",\n                \"account-expiry-check-authenticator\",\n                \"phone-otp-authenticator\",\n                \"browser-PhoneOTP Browser - Conditional 2FA\",\n            ],\n        )\nE       AssertionError: Lists differ: ['aut[23 chars]m', 'phone-otp-authenticator', 'browser-PhoneO[25 chars]2FA'] != ['aut[23 chars]m', 'account-expiry-check-authenticator', 'pho[63 chars]2FA']\nE       \nE       First differing element 1:\nE       'phone-otp-authenticator'\nE       'account-expiry-check-authenticator'\nE       \nE       Second list contains 1 additional elements.\nE       First extra element 3:\nE       'browser-PhoneOTP Browser - Conditional 2FA'\nE       \nE         ['auth-username-password-form',\nE       +  'account-expiry-check-authenticator',\nE          'phone-otp-authenticator',\nE          'browser-PhoneOTP Browser - Conditional 2FA']\n\ntests/live_config/test_live_config.py:1518: AssertionError"
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step4_end_to_end_login_otp_enforcement",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 1.267,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step4_otp_admin_api_rbac_and_validation",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 1.206,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step4_phone_otp_authenticator_config",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.009,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step5_account_expiry_integration",
+      "outcome": "failed",
+      "when": "call",
+      "duration": 0.902,
+      "longrepr": "self = <test_live_config.LiveConfigValidationTests testMethod=test_step5_account_expiry_integration>\n\n    def test_step5_account_expiry_integration(self) -> None:\n        import uuid\n        import socket\n        import http.server\n        import threading\n        import requests\n        import urllib3\n        from urllib.parse import urlparse, parse_qs\n        from bs4 import BeautifulSoup\n    \n        # Disable warnings for self-signed certificates in dev\n        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)\n    \n        # 1. Verify SPI is loaded and endpoint returns timezone arrays\n        status, _, body = self.client.raw_request(\"GET\", f\"/realms/{self.realm}/account-expiry-admin/timezones\")\n        self.assertEqual(status, 200)\n    \n        # 2. Verify SPI injected required fields into User Profile Schema\n        status, _, body = self.client.raw_request(\"GET\", f\"/admin/realms/{self.realm}/users/profile\")\n        self.assertEqual(status, 200)\n        schema = json.loads(body)\n        attr_names = [a[\"name\"] for a in schema.get(\"attributes\", [])]\n        self.assertIn(\"account_expiry_date\", attr_names)\n        self.assertIn(\"account_expiry_timezone\", attr_names)\n    \n    \n        # 3. Test Authentication behavior\n        suffix = uuid.uuid4().hex[:8]\n        u_name = f\"expiry-tester-{suffix}\"\n        pw = f\"Expiry@{suffix}123!\"\n        reminder_user_name = f\"expiry-um-{suffix}\"\n        reminder_user_pw = f\"ExpiryUm@{suffix}123!\"\n        dg_client_id = f\"expiry-claim-{suffix}\"\n    \n        # Create a test user with a phone number and verified status so they bypass OTP\n        # (Focus exclusively on Expiry logic)\n        u_id = self._create_user_with_password(\n            username=u_name,\n            password=pw,\n            first_name=\"Expiry\",\n            last_name=\"Tester\",\n            attributes={\"phone_number\": [\"+1234567890\"], \"phone_verified\": [\"true\"]}\n        )\n        created_user_ids = [u_id]\n        reminder_user_id = self._create_user_with_password(\n            username=reminder_user_name,\n            password=reminder_user_pw,\n            first_name=\"Expiry\",\n            last_name=\"Manager\",\n            attributes={\"phone_verified\": [\"true\"]},\n        )\n        created_user_ids.append(reminder_user_id)\n    \n        # Create dummy client with Standard Flow\n        dummy_client_id = f\"expiry-test-app-{suffix}\"\n        self.client.post(\n            f\"/admin/realms/{self.realm}/clients\",\n            json_body={\n                \"clientId\": dummy_client_id,\n                \"protocol\": \"openid-connect\",\n                \"publicClient\": True,\n                \"standardFlowEnabled\": True,\n                \"directAccessGrantsEnabled\": False,\n                \"redirectUris\": [\"*\"]\n            }\n        )\n        dg_client_uuid = self._create_direct_grant_client(dg_client_id)\n        realm_roles = self.client.get(f\"/admin/realms/{self.realm}/roles\")\n        user_manager_role = next((r for r in realm_roles if r[\"name\"] == \"user-manager\"), None)\n        self.assertIsNotNone(user_manager_role)\n        assign_status, _, _ = self.client.post(\n            f\"/admin/realms/{self.realm}/users/{reminder_user_id}/role-mappings/realm\",\n            json_body=[{\"id\": user_manager_role[\"id\"], \"name\": user_manager_role[\"name\"]}],\n        )\n        self.assertIn(assign_status, {200, 204})\n        try:\n            browser_session = requests.Session()\n            browser_session.verify = False\n    \n            base_url = \"http://vg-keycloak:8080/\"\n            valid_redirect = \"http://vg-keycloak:8080/callback\"\n    \n            def attempt_login(username, password):\n                auth_url = f\"{base_url}realms/{self.realm}/protocol/openid-connect/auth?client_id={dummy_client_id}&response_type=code&redirect_uri={valid_redirect}&scope=openid\"\n                browser_session.cookies.clear()\n                resp = browser_session.get(auth_url, allow_redirects=True)\n                soup = BeautifulSoup(resp.text, 'html.parser')\n                form = soup.find('form')\n                if not form: return resp, soup, \"NO_FORM\"\n    \n                action_url = form['action']\n                resp = browser_session.post(action_url, data={\"username\": username, \"password\": password, \"credentialId\": \"\"}, allow_redirects=False)\n                # Successful login results in 302 redirect to the callback\n                event = \"LOGIN_ATTEMPTED\"\n                if resp.status_code == 302:\n                    event = \"LOGIN_SUCCESS_REDIRECT\"\n                return resp, BeautifulSoup(resp.text, 'html.parser'), event\n    \n            # Scenario A: No Expiry Set -> Should Succeed\n            resp, soup, event = attempt_login(u_name, pw)\n            self.assertEqual(resp.status_code, 302) # Success redirect\n            self.assertIn(\"/callback\", resp.headers.get(\"Location\", \"\"))\n    \n            # Scenario B: Future Expiry -> Should Succeed\n            future_date = \"2040-01-01\"\n            user_prof = self.client.get(f\"/admin/realms/{self.realm}/users/{u_id}\")\n            import copy\n            user_prof_update = copy.deepcopy(user_prof)\n            user_prof_update[\"attributes\"] = {**user_prof_update.get(\"attributes\", {}), \"account_expiry_date\": [future_date], \"account_expiry_timezone\": [\"Asia/Kolkata\"]}\n            self.client.put(f\"/admin/realms/{self.realm}/users/{u_id}\", json_body=user_prof_update)\n    \n            warning_token = self.client.issue_token(self.realm, dg_client_id, u_name, pw)\n            warning_claims = decode_jwt_payload(warning_token[\"access_token\"])\n            self.assertIn(\"account_expiry\", warning_claims)\n            self.assertEqual(warning_claims[\"account_expiry\"][\"configured\"], True)\n            self.assertEqual(warning_claims[\"account_expiry\"][\"warning\"], False)\n            self.assertEqual(warning_claims[\"account_expiry\"][\"expired\"], False)\n            self.assertEqual(warning_claims[\"account_expiry\"][\"localDate\"], future_date)\n    \n            resp, soup, event = attempt_login(u_name, pw)\n            self.assertEqual(resp.status_code, 302) # Success redirect\n            self.assertIn(\"/callback\", resp.headers.get(\"Location\", \"\"))\n    \n            near_future_date = \"2026-03-20\"\n            user_prof_update[\"attributes\"][\"account_expiry_date\"] = [near_future_date]\n            self.client.put(f\"/admin/realms/{self.realm}/users/{u_id}\", json_body=user_prof_update)\n    \n            warning_token = self.client.issue_token(self.realm, dg_client_id, u_name, pw)\n            warning_claims = decode_jwt_payload(warning_token[\"access_token\"])\n            self.assertEqual(warning_claims[\"account_expiry\"][\"configured\"], True)\n            self.assertEqual(warning_claims[\"account_expiry\"][\"warning\"], True)\n            self.assertEqual(warning_claims[\"account_expiry\"][\"expired\"], False)\n            self.assertLessEqual(warning_claims[\"account_expiry\"][\"daysRemaining\"], 28)\n            self.assertEqual(warning_claims[\"account_expiry\"][\"localDate\"], near_future_date)\n    \n            reminder_token = self.client.issue_token(self.realm, \"admin-cli\", reminder_user_name, reminder_user_pw)[\"access_token\"]\n            status, _, body = self.client.raw_request(\n                \"GET\",\n                f\"/realms/{self.realm}/account-expiry-admin/expirations\",\n                query={\"windowDays\": 28},\n                headers={\"Authorization\": f\"Bearer {reminder_token}\"},\n            )\n            self.assertEqual(status, 200)\n            reminder_payload = json.loads(body)\n            reminder_match = next((item for item in reminder_payload.get(\"upcoming\", []) if item.get(\"userId\") == u_id), None)\n            self.assertIsNotNone(reminder_match)\n            self.assertEqual(reminder_match[\"warning\"], True)\n            self.assertEqual(reminder_match[\"expired\"], False)\n            self.assertLessEqual(reminder_match[\"daysRemaining\"], 28)\n    \n            # Scenario C: Past Expiry -> Should FAIL\n            past_date = \"2020-01-01\"\n            user_prof_update[\"attributes\"][\"account_expiry_date\"] = [past_date]\n            self.client.put(f\"/admin/realms/{self.realm}/users/{u_id}\", json_body=user_prof_update)\n    \n            resp, soup, event = attempt_login(u_name, pw)\n            # Should NOT redirect, but show error page\n>           self.assertNotEqual(resp.status_code, 302)\nE           AssertionError: 302 == 302\n\ntests/live_config/test_live_config.py:1870: AssertionError"
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step6_admin_permissions_enabled",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.0,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step6_client_manager_permissions_enforcement",
+      "outcome": "failed",
+      "when": "call",
+      "duration": 0.224,
+      "longrepr": "self = <test_live_config.LiveConfigValidationTests testMethod=test_step6_client_manager_permissions_enforcement>\n\n    def test_step6_client_manager_permissions_enforcement(self) -> None:\n        \"\"\"Test that client-manager can create/view clients but NOT delete them.\n    \n        Permissions are controlled by realm-management role composites:\n        - create-client role \u2192 allows creating clients\n        - view-clients role \u2192 allows viewing clients\n        - delete \u2192 NOT allowed (no manage-clients role in composite)\n        \"\"\"\n        import uuid\n    \n        suffix = uuid.uuid4().hex[:8]\n        created_client_ids = []\n        created_user_ids = []\n    \n        try:\n            # Create a client-manager user\n            cm_user = f\"client-mgr-{suffix}\"\n            cm_pw = f\"ClientMgr@{suffix}123!\"\n            cm_id = self._create_user_with_password(cm_user, cm_pw, \"Client\", \"Manager\", {})\n            created_user_ids.append(cm_id)\n    \n            # Assign client-manager role to user\n            roles = self.client.get(f\"/admin/realms/{self.realm}/roles\")\n            cm_role = next((r for r in roles if r[\"name\"] == \"client-manager\"), None)\n            self.assertIsNotNone(cm_role)\n            self.client.post(\n                f\"/admin/realms/{self.realm}/users/{cm_id}/role-mappings/realm\",\n                json_body=[{\"id\": cm_role[\"id\"], \"name\": cm_role[\"name\"]}]\n            )\n    \n            # Get token for client-manager user\n            cm_token = self.client.issue_token(self.realm, \"admin-cli\", cm_user, cm_pw)[\"access_token\"]\n            original_token = self.client.token\n    \n            def run_as(token, callback):\n                self.client.token = token\n                try:\n                    return callback()\n                finally:\n                    self.client.token = original_token\n    \n            # Test 1: client-manager CAN view clients\n            def test_view_clients():\n                status, _, body = self.client.raw_request(\n                    \"GET\", f\"/admin/realms/{self.realm}/clients\"\n                )\n                return status\n    \n            view_status = run_as(cm_token, test_view_clients)\n            self.assertEqual(view_status, 200, \"client-manager should be able to view clients\")\n    \n            # Test 2: client-manager CAN create clients (via create-client realm-management role)\n            def test_create_client():\n                new_client_id = f\"test-cm-client-{suffix}\"\n                status, _, body = self.client.raw_request(\n                    \"POST\", f\"/admin/realms/{self.realm}/clients\",\n                    json_body={\n                        \"clientId\": new_client_id,\n                        \"name\": f\"Test Client Manager Client {suffix}\",\n                        \"enabled\": True,\n                        \"publicClient\": True,\n                        \"protocol\": \"openid-connect\"\n                    }\n                )\n                return status\n    \n            create_status = run_as(cm_token, test_create_client)\n>           self.assertIn(create_status, [201, 204],\n                f\"client-manager should be able to create clients, got {create_status}\")\nE               AssertionError: 403 not found in [201, 204] : client-manager should be able to create clients, got 403\n\ntests/live_config/test_live_config.py:2069: AssertionError"
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step6_client_manager_role_exists",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.006,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step6_docker_compose_config",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.008,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step6_fgap_role_policy_exists",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.008,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step6_fgap_scope_permission_exists",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.005,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step6_keycloak_healthcheck_config",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.008,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_step6_test_user_exists",
+      "outcome": "skipped",
+      "when": "call",
+      "duration": 0.01,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_token_claims_from_minimal_and_detail_scopes",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.322,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_token_endpoint_rate_limit_triggers_via_nginx",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 2.054,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_user_manager_role_and_composites_exist",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.024,
+      "longrepr": null
+    },
+    {
+      "node_id": "test_live_config.py::LiveConfigValidationTests::test_user_profile_schema_contains_expected_custom_attributes",
+      "outcome": "passed",
+      "when": "call",
+      "duration": 0.0,
+      "longrepr": null
+    }
+  ]
+}

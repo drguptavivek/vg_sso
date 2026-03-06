@@ -1,0 +1,405 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: vg-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${KC_DB_NAME:-keycloak}
+      POSTGRES_USER: ${KC_DB_USERNAME:-keycloak}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD:-change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${KC_DB_USERNAME:-keycloak} -d ${KC_DB_NAME:-keycloak}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  keycloak:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vg-keycloak
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KC_DB_NAME:-keycloak}
+      KC_DB_USERNAME: ${KC_DB_USERNAME:-keycloak}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:-change_me}
+      KC_HTTP_ENABLED: ${KC_HTTP_ENABLED:-true}
+      KC_HTTP_HOST: 0.0.0.0
+      KC_HTTP_PORT: ${KC_HTTP_PORT:-8080}
+      KC_HTTP_MANAGEMENT_HOST: 0.0.0.0
+      KC_HTTP_MANAGEMENT_PORT: ${KC_HTTP_MANAGEMENT_PORT:-9000}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-ChangeMe123!}
+      KC_FAILURE_LOG_FILE: ${KC_FAILURE_LOG_FILE:-/var/log/keycloak/failure-auth.log}
+    command: [ "start", "--optimized", "--features=admin-fine-grained-authz:v2", "--health-enabled=true" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:9000/management/health/ready || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    ports:
+      - "9000:9000"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ${KC_HOST_LOG_DIR:-./logs/keycloak}:/var/log/keycloak
+
+  step1-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vg-step1-init
+    restart: "no"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      STEP1_FORCE: ${STEP1_FORCE:-false}
+      KEYCLOAK_ENV: ${KEYCLOAK_ENV:-production}
+      KC_NEW_REALM_ADMIN_PHONE: ${KC_NEW_REALM_ADMIN_PHONE:-}
+      KC_NEW_REALM_ADMIN_PHONE_VERIFIED: ${KC_NEW_REALM_ADMIN_PHONE_VERIFIED:-}
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step1_bootstrap_docker.sh" ]
+
+  step2-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vg-step2-init
+    restart: "no"
+    depends_on:
+      step1-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP2_FORCE: ${STEP2_FORCE:-false}
+      KEYCLOAK_ENV: ${KEYCLOAK_ENV:-production}
+      KC_NEW_REALM_ADMIN_PHONE: ${KC_NEW_REALM_ADMIN_PHONE:-}
+      KC_NEW_REALM_ADMIN_PHONE_VERIFIED: ${KC_NEW_REALM_ADMIN_PHONE_VERIFIED:-}
+    volumes:
+      - .:/workspace:ro
+      - keycloak_data:/opt/keycloak/data
+    entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step2_realm_config_docker.sh" ]
+
+  step2-fgap-init:
+    build:
+      context: .
+      dockerfile: tests/step2_fgap/Dockerfile
+    container_name: vg-step2-fgap-init
+    restart: "no"
+    depends_on:
+      step2-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP2_FGAP_FORCE: ${STEP2_FGAP_FORCE:-false}
+      STEP2_FGAP_MARKER_FILE: /opt/keycloak/data/.step2-fgap-init-done
+    volumes:
+      - .:/workspace:ro
+      - keycloak_data:/opt/keycloak/data
+    working_dir: /workspace
+    command: [ "/bin/sh", "-lc", "echo 'STEP2-FGAP: starting FGAP bootstrap' && python /workspace/scripts/step2_fgap_api_setup.py --url http://keycloak:8080 --realm \"$${KC_NEW_REALM_NAME:-org-new-delhi}\" --user \"$${KC_NEW_REALM_ADMIN_USER:-permrealmadmin}\" --password \"$${KC_NEW_REALM_ADMIN_PASSWORD:-StrongPerm@123}\" --marker-file /opt/keycloak/data/.step2-fgap-init-done && echo 'STEP2-FGAP: completed successfully'" ]
+
+  step3-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vg-step3-init
+    restart: "no"
+    depends_on:
+      step2-fgap-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP3_FORCE: ${STEP3_FORCE:-false}
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step3_claims_config_docker.sh" ]
+
+  step4-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vg-step4-init
+    restart: "no"
+    depends_on:
+      step3-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP4_FORCE: ${STEP4_FORCE:-false}
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step4_otp_config_docker.sh" ]
+  step5-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vg-step5-init
+    restart: "no"
+    depends_on:
+      step4-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP5_FORCE: ${STEP5_FORCE:-false}
+      KEYCLOAK_ADMIN: ${KC_MASTER_ADMIN_USER:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_MASTER_ADMIN_PASSWORD:-admin}
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step5_expiry_config_docker.sh" ]
+
+  step6-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vg-step6-init
+    restart: "no"
+    depends_on:
+      step5-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP6_FORCE: ${STEP6_FORCE:-false}
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step6_client_admin_setup.sh" ]
+
+  step6-fgap-init:
+    build:
+      context: .
+      dockerfile: tests/step6_fgap/Dockerfile
+    container_name: vg-step6-fgap-init
+    restart: "no"
+    depends_on:
+      step6-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP6_FGAP_FORCE: ${STEP6_FGAP_FORCE:-false}
+    volumes:
+      - .:/workspace:ro
+      - keycloak_data:/opt/keycloak/data
+    working_dir: /workspace
+    command: [ "/bin/sh", "-lc", "echo 'STEP6-FGAP: starting FGAP setup for client-manager' && python3 /workspace/scripts/step6_fgap_api_setup.py --url http://keycloak:8080 --realm \"$${KC_NEW_REALM_NAME:-org-new-delhi}\" --user \"$${KC_NEW_REALM_ADMIN_USER:-permrealmadmin}\" --password \"$${KC_NEW_REALM_ADMIN_PASSWORD}\" --env \"$$KEYCLOAK_ENV\" --marker-file /opt/keycloak/data/.step6-fgap-init-done && echo 'STEP6-FGAP: completed successfully'" ]
+
+  step7-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vg-step7-init
+    restart: "no"
+    depends_on:
+      step6-fgap-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP7_FORCE: ${STEP7_FORCE:-false}
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step7_approles_bootstrap.sh" ]
+
+  step7-fgap-init:
+    build:
+      context: .
+      dockerfile: tests/step6_fgap/Dockerfile
+    container_name: vg-step7-fgap-init
+    restart: "no"
+    depends_on:
+      step7-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP7_FGAP_FORCE: ${STEP7_FGAP_FORCE:-false}
+    volumes:
+      - .:/workspace:ro
+      - keycloak_data:/opt/keycloak/data
+    working_dir: /workspace
+    command: [ "/bin/sh", "-lc", "echo 'STEP7-FGAP: starting FGAP setup for delegated-client-admin-base' && python3 /workspace/scripts/step7_fgap_api_setup.py --url http://keycloak:8080 --realm \"$${KC_NEW_REALM_NAME:-org-new-delhi}\" --user \"$${KC_NEW_REALM_ADMIN_USER:-permrealmadmin}\" --password \"$${KC_NEW_REALM_ADMIN_PASSWORD}\" --marker-file /opt/keycloak/data/.step7-fgap-init-done && echo 'STEP7-FGAP: completed successfully'" ]
+
+  step8-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vg-step8-init
+    restart: "no"
+    depends_on:
+      step7-fgap-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP8_FORCE: ${STEP8_FORCE:-false}
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step8_auditor_setup.sh" ]
+
+  step9-init:
+    build:
+      context: .
+      dockerfile: tests/step6_fgap/Dockerfile
+    container_name: vg-step9-init
+    restart: "no"
+    depends_on:
+      step8-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP9_FORCE: ${STEP9_FORCE:-false}
+      STEP9_RUN_INITIAL_EXPORT: ${STEP9_RUN_INITIAL_EXPORT:-false}
+      AUDIT_EXPORT_OUTPUT_DIR: ${AUDIT_EXPORT_OUTPUT_DIR:-/workspace/exports/audit}
+      AUDIT_EXPORT_STATE_FILE: ${AUDIT_EXPORT_STATE_FILE:-/workspace/exports/audit/state/watermark.json}
+      KC_SERVER_URL: http://keycloak:8080
+    volumes:
+      - .:/workspace
+      - keycloak_data:/opt/keycloak/data
+    working_dir: /workspace
+    command: [ "/bin/bash", "/workspace/scripts/step9_audit_archival_setup.sh" ]
+
+  keycloak-maintenance:
+    build:
+      context: .
+      dockerfile: tests/step6_fgap/Dockerfile
+    container_name: vg-keycloak-maintenance
+    restart: "no"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      KC_SERVER_URL: http://keycloak:8080
+      AUDIT_EXPORT_OUTPUT_DIR: ${AUDIT_EXPORT_OUTPUT_DIR:-/workspace/exports/audit}
+      AUDIT_EXPORT_STATE_FILE: ${AUDIT_EXPORT_STATE_FILE:-/workspace/exports/audit/state/watermark.json}
+      AUDIT_EXPORT_START_DATE: ${AUDIT_EXPORT_START_DATE:-}
+      AUDIT_EXPORT_END_DATE: ${AUDIT_EXPORT_END_DATE:-}
+      AUDIT_EXPORT_BATCH_SIZE: ${AUDIT_EXPORT_BATCH_SIZE:-500}
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: [ "/bin/bash", "-lc", "echo 'Run with: docker compose ... run --rm keycloak-maintenance <command>'" ]
+
+  nginx-proxy:
+    build:
+      context: .
+      dockerfile: tests/nginx/Dockerfile
+    container_name: vg-nginx-proxy
+    restart: "no"
+    profiles: [ "test" ]
+    depends_on:
+      keycloak:
+        condition: service_started
+    volumes:
+      - ./nginx-confs/docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx-confs/docker/00-global-http.conf:/etc/nginx/conf.d/00-global-http.conf:ro
+      - ./nginx-confs/docker/sso1-master.conf:/etc/nginx/conf.d/sso1-master.conf:ro
+      - ./nginx-confs/docker/sso2-org-new-delhi.conf:/etc/nginx/conf.d/sso2-org-new-delhi.conf:ro
+
+  step7-test:
+    build:
+      context: .
+      dockerfile: tests/step6_fgap/Dockerfile
+    container_name: vg-step7-test
+    profiles: [ "test" ]
+    depends_on:
+      step7-fgap-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      KC_SERVER_URL: http://keycloak:8080
+    volumes:
+      - .:/workspace:ro
+    working_dir: /workspace
+    command: [ "python3", "scripts/test_step7_pca.py" ]
+
+  config-tests:
+    build:
+      context: .
+      dockerfile: tests/live_config/Dockerfile
+    container_name: vg-config-tests
+    restart: "no"
+    profiles: [ "test" ]
+    depends_on:
+      step9-init:
+        condition: service_completed_successfully
+      nginx-proxy:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      KC_SERVER_URL: http://keycloak:8080
+      KC_PROXY_HTTP_URL: http://nginx-proxy
+      KC_PROXY_HTTPS_URL: https://nginx-proxy
+      KC_PROXY_MASTER_HOST: sso1.local.test
+      KC_PROXY_REALM_HOST: sso2.local.test
+      KC_PROXY_ADMIN_ALLOWED_IP: 192.168.1.34
+      KC_PROXY_ADMIN_DENIED_IP: 192.168.1.99
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - .:/workspace:ro
+      - ./tmp:/workspace/tmp
+      - ./tests/results:/workspace/tests/results
+      - config_tests_venv:/opt/venv
+      - config_tests_uv_cache:/root/.cache/uv
+    working_dir: /workspace
+    command: [ "/bin/sh", "-lc", "echo 'CONFIG-TESTS: starting pytest run' && status=0 && uv run --project /tmp/live-config pytest -o cache_dir=/tmp/pytest-cache /workspace/tests/live_config -v || status=$$? && echo \"CONFIG-TESTS: pytest finished with status $$status\" && echo 'CONFIG-TESTS: generating reports' && uv run --project /tmp/live-config python /workspace/tests/live_config/generate_report.py --markdown-out /workspace/tests/results/live-config-report.md --json-out /workspace/tests/results/live-config-report.json && echo 'CONFIG-TESTS: report generation complete' && exit $$status" ]
+
+  spi-unit-tests:
+    image: maven:3.9-eclipse-temurin-21
+    container_name: vg-spi-unit-tests
+    profiles: [ "test" ]
+    volumes:
+      - .:/workspace
+      - ~/.m2:/root/.m2
+      - ./tests/spi_coverage:/workspace/reports
+    working_dir: /workspace
+    command: >
+      /bin/sh -c " mvn test -f custom-account-expiry-spi/pom.xml && cp -r custom-account-expiry-spi/target/site/jacoco/. reports/custom-account-expiry-spi/ && mvn test -f custom-group-attr-mapper/pom.xml && cp -r custom-group-attr-mapper/target/site/jacoco/. reports/custom-group-attr-mapper/ && mvn test -f custom-phone-otp-authenticator/pom.xml && cp -r custom-phone-otp-authenticator/target/site/jacoco/. reports/custom-phone-otp-authenticator/ && mvn test -f custom-password-phrase-policy-spi/pom.xml && cp -r custom-password-phrase-policy-spi/target/site/jacoco/. reports/custom-password-phrase-policy-spi/ && mvn test -f custom-failure-logs-event-listener-spi/pom.xml && cp -r custom-failure-logs-event-listener-spi/target/site/jacoco/. reports/custom-failure-logs-event-listener-spi/ "
+
+  step6-test:
+    build:
+      context: .
+      dockerfile: tests/step6_fgap/Dockerfile
+    container_name: vg-step6-test
+    profiles: [ "test" ]
+    depends_on:
+      step6-fgap-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      KC_SERVER_URL: http://keycloak:8080
+    volumes:
+      - .:/workspace:ro
+    working_dir: /workspace
+    command: [ "python3", "scripts/test_step6_delegation.py" ]
+
+volumes:
+  postgres_data:
+  keycloak_data:
+  config_tests_venv:
+  config_tests_uv_cache:

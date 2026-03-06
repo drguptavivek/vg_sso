@@ -1,0 +1,28 @@
+[Unit]
+Description=Keycloak (via Makefile)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=keycloak
+Group=keycloak
+WorkingDirectory=/opt/vg_sso
+ExecStart=/usr/bin/make kc-prod
+Restart=always
+RestartSec=5
+TimeoutStartSec=300
+TimeoutStopSec=120
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/opt/vg_sso /var/log/keycloak
+
+[Install]
+WantedBy=multi-user.target

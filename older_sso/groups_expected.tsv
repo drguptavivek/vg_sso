@@ -1,0 +1,13 @@
+/baseline-group	__NONE__	
+/Departments	__NONE__	
+/Departments/General Medicine	dept_id	1001
+/Departments/General Medicine	dept_code	GEN-MED
+/Departments/General Surgery	dept_id	1002
+/Departments/General Surgery	dept_code	GEN-SURG
+/IT Roles	__NONE__	
+/IT Roles/app-admins	__NONE__	
+/IT Roles/app-admins/example-client	__NONE__	
+/IT Roles/sso_user_manager	__NONE__	
+/User Type	__NONE__	
+/User Type/faculty	__NONE__	
+/User Type/resident	__NONE__	
