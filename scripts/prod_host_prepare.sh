@@ -17,7 +17,7 @@ OPS_GROUP="${OPS_GROUP:-vgops}"
 APP_DIR="${APP_DIR:-/opt/vg_sso}"
 KEYCLOAK_LOG_DIR="${KEYCLOAK_LOG_DIR:-/var/log/keycloak}"
 EDIT_USERS="${EDIT_USERS:-}"
-LOGROTATE_SRC="${LOGROTATE_SRC:-$ROOT_DIR/deploy/logrotate/keycloak}"
+LOGROTATE_SRC="${LOGROTATE_SRC:-$ROOT_DIR/scripts/logrotate/keycloak}"
 LOGROTATE_DST="${LOGROTATE_DST:-/etc/logrotate.d/keycloak}"
 
 if ! getent group "$KEYCLOAK_GROUP" >/dev/null 2>&1; then

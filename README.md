@@ -1,6 +1,6 @@
 # VG SSO
 
-This repository packages a Docker-based Keycloak deployment for the `org-new-delhi` realm, with custom providers, themes, bootstrap automation, delegated administration, audit/logging support, and verification tests. Based on 26.5.4
+This repository packages a Docker-based Keycloak deployment built on Keycloak 26.5.4, with custom providers, themes, bootstrap automation, delegated administration, audit/logging support, and verification tests. The target realm name is defined in `.env` and is not hard-coded in the implementation.
 
 The main README is intentionally brief. It is the entry point for understanding what this repo does and how to get it running. Detailed implementation notes, policy writeups, and step-specific rollout docs live in [`docs/`](docs/).
 
@@ -60,6 +60,7 @@ Realm roles define broad responsibilities, FGAP narrows the admin surface, the A
 
 ## What this repo includes
 
+- Environment-driven realm bootstrap, where the realm name and admin identities come from `.env`.
 - Dockerized Keycloak and PostgreSQL workflow for local development and repeatable setup.
 - Automated realm bootstrap and post-bootstrap configuration through ordered init steps.
 - Custom themes for login, account, and admin surfaces.
@@ -74,8 +75,8 @@ Realm roles define broad responsibilities, FGAP narrows the admin surface, the A
 - Layered browser authentication with account expiry enforcement and SMS OTP support.
 - Delegated admin roles and fine-grained admin permissions for user and client administration.
 - Controlled token claims and custom protocol mappers.
-- Auditor-oriented role/config setup and audit export workflow.
-- Failure-only authentication event logging and host-mounted log persistence.
+- Auditor-oriented role/config setup, 270-day event retention baseline, and audit export workflow.
+- Full user-event logging baseline, plus structured failure-only authentication logging and host-mounted log persistence.
 
 ## Customizations summary
 
@@ -90,8 +91,9 @@ From an end-user and operator perspective, this setup already includes more than
 - Delegated administration roles and FGAP-based permissions for user management and client administration without handing out full realm-admin access.
 - Controlled OIDC claim shaping through custom protocol mappers and curated client scopes such as `org-minimal` and `detail-profile`.
 - App-role and default-role bootstrap so newly created users and delegated admins start from a governed baseline.
-- Auditor-oriented configuration and audit archival/export support for operational review and retention.
-- Failure-auth event logging separated into dedicated log output for easier monitoring and triage.
+- Auditor-oriented configuration, all 120 user event types enabled, and 270-day retention for operational review and retention.
+- Failure-auth event logging separated into a dedicated JSON log output that can be parsed by external tools such as CrowdSec and Graylog.
+- Host bind mounts for runtime and failure-log persistence, plus audit archival/export procedures for older logs.
 
 ## Custom providers
 
@@ -103,6 +105,22 @@ This repo currently contains these custom provider modules:
 - `custom-delegated-admin-guard-spi`
 - `custom-password-phrase-policy-spi`
 - `custom-failure-logs-event-listener-spi`
+
+## Prerequisites
+
+For the standard local workflow, install these tools first:
+
+- Docker with Docker Compose support
+- GNU Make or compatible `make`
+- JDK 21
+- Maven
+
+Additional tooling used by some maintenance or helper workflows:
+
+- `uv` for Python-based utility flows that use the local scripts/tooling
+- `curl` for local health and endpoint checks
+
+If you only need to run the containerized stack, Docker and `make` are the main requirements. JDK 21 and Maven are required when building or iterating on the custom Java SPIs from the host.
 
 ## Quick Start
 
@@ -116,6 +134,7 @@ cp .env.template .env
 
 At minimum, review:
 
+- `KC_NEW_REALM_NAME` for the realm you want this environment to provision
 - bootstrap and admin credentials
 - database credentials
 - realm admin identity fields
@@ -146,15 +165,49 @@ make ps
 
 Use the `Makefile` instead of remembering the full compose commands.
 
+
+Key targets:
+- `make up` performs the standard local startup flow, including branding, host log-dir preparation, SPI builds, and `docker compose up -d --build`.
+- `make dev-up` hot-reloads SPIs, then starts the full dev stack.
+- `make build-spis` builds all custom SPI JARs on the host.
+- `make apply-branding` applies local branding assets from `.local/brand-assets`.
+- `make dev-reload-spi` rebuilds/copies SPI JARs into the running Keycloak container and restarts it.
+- `make logs-runtime` focuses on `keycloak` and `postgres`; `make logs-init` focuses on init containers.
+- `make force-step1` through `make force-step9` re-run individual init stages when iterating on bootstrap logic.
+- `make maintenance` runs an arbitrary command inside the `keycloak-maintenance` container without triggering unrelated init steps.
+- `make audit-export` runs the audit export job and updates the export watermark.
+
+Branding note:
+- Put override assets in `.local/brand-assets/` and run `make apply-branding`.
+- `make up` and `make dev-up` already apply branding automatically.
+- Supported asset names include `background.png`, `green_logo.png`, `logo.png`, `logo.svg`, and `favicon.ico`.
+
+
 ```bash
 make help
 make up
+make dev-up
+make logs
+make logs-all
+make build-spis
+make apply-branding
+make dev-reload-spi
 make down
 make reset
-make logs
+make ps
 make logs-runtime
 make logs-init
+make force-step1
+make force-step2
+make force-step3
 make force-step4
+make force-step5
+make force-step6
+make force-step7
+make force-step7-fgap
+make force-step8
+make force-step9
+make maintenance MAINT_CMD='python3 /workspace/scripts/audit_export_events.py --dry-run'
 make audit-export
 make test-config
 make test-step6
@@ -165,7 +218,8 @@ make test-step7
 
 For normal local work:
 
-- `make up` builds the SPIs, prepares log directories, applies local branding assets, and starts the dev compose stack.
+- `make up` applies local branding assets, prepares log directories, builds the SPIs, and starts the dev compose stack.
+- `make dev-up` is the faster path when the stack is already running and you want a hot-reload-oriented startup flow.
 - `make logs` or `make logs-init` shows bootstrap and runtime progress.
 - `make reset` resets the local environment when you need a clean state.
 
@@ -208,8 +262,10 @@ Test artifacts are written under [`tests/results/`](tests/results/).
 ## Logs and audit data
 
 - Runtime logs are bind-mounted from the container to the host path configured by `KC_HOST_LOG_DIR`.
-- Failure-only auth events are written to `KC_FAILURE_LOG_FILE`.
+- Failure-only auth events are written as structured JSON to `KC_FAILURE_LOG_FILE`, making the output suitable for downstream parsers such as CrowdSec, Graylog, and similar log-processing tools.
+- The realm baseline enables all 120 user event types and configures a 270-day retention window.
 - Audit exports use the `AUDIT_EXPORT_*` settings in `.env` and can be run on demand via `make audit-export`.
+- The repository also includes an archival procedure for older audit/log data; see the audit archival docs for the operational workflow.
 
 ## Where to go deeper
 
@@ -237,3 +293,15 @@ Test artifacts are written under [`tests/results/`](tests/results/).
   - [`docs/Step_7_per_client_admin.md`](docs/Step_7_per_client_admin.md)
   - [`docs/Step_8_auditor_role.md`](docs/Step_8_auditor_role.md)
   - [`docs/Step_9_audit_archival.md`](docs/Step_9_audit_archival.md)
+
+
+## Troubleshooting SSL Requirements (`sslRequired`)
+
+If Keycloak forces an "HTTPS required" error on localhost:
+1. Ensure `KEYCLOAK_ENV=development` is properly set in your `.env.dev` (or exported locally). 
+2. Ensure you have allowed the step containers (`step1` to `step6`) to fully finish running. SSL enforcement is applied during initialization, and until the scripts finish configuring the realm, it defaults to Keycloak's restrictive `external` requirement.
+3. Validate current behavior:
+```bash
+./kcadm.sh get realms/org-new-delhi --fields sslRequired --config .kcadm.config
+```
+
