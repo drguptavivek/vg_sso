@@ -223,6 +223,10 @@ make test-step6
 make test-step7
 ```
 
+## Troubleshooting
+
+- If Keycloak exits with code 2 and logs warnings about build-time options (for example `kc.features`), it means runtime options do not match the image build. Rebuild the image and avoid passing `--features=...` at runtime. Use `KC_FEATURES` during the image build (see `Dockerfile` build args and `docker-compose.yml` build args), then start with `make prod-up`.
+
 ## Development workflow
 
 For normal local work:
