@@ -1,6 +1,6 @@
 # VG SSO
 
-This repository packages a Docker-based Keycloak deployment built on Keycloak 26.5.4, with custom providers, themes, bootstrap automation, delegated administration, audit/logging support, and verification tests. The target realm name is defined in `.env` and is not hard-coded in the implementation.
+This repository packages a Docker-based Keycloak deployment built on Keycloak 26.5.6, with custom providers, themes, bootstrap automation, delegated administration, audit/logging support, and verification tests. The target realm name is defined in `.env` and is not hard-coded in the implementation.
 
 The main README is intentionally brief. It is the entry point for understanding what this repo does and how to get it running. Detailed implementation notes, policy writeups, and step-specific rollout docs live in [`docs/`](docs/).
 
@@ -143,10 +143,16 @@ At minimum, review:
 - log and audit export paths
 - `KEYCLOAK_ENV` when working locally
 
-3. Start the local development stack.
+3. Start the stack.
 
 ```bash
 make up
+```
+
+Production (base compose only, no dev override):
+
+```bash
+make prod-up
 ```
 
 4. Check service state.
@@ -168,6 +174,7 @@ Use the `Makefile` instead of remembering the full compose commands.
 
 Key targets:
 - `make up` performs the standard local startup flow, including branding, host log-dir preparation, SPI builds, and `docker compose up -d --build`.
+- `make prod-up` starts the production stack using only `docker-compose.yml` (no dev override).
 - `make dev-up` hot-reloads SPIs, then starts the full dev stack.
 - `make build-spis` builds all custom SPI JARs on the host.
 - `make apply-branding` applies local branding assets from `.local/brand-assets`.
@@ -176,6 +183,7 @@ Key targets:
 - `make force-step1` through `make force-step9` re-run individual init stages when iterating on bootstrap logic.
 - `make maintenance` runs an arbitrary command inside the `keycloak-maintenance` container without triggering unrelated init steps.
 - `make audit-export` runs the audit export job and updates the export watermark.
+- `make prod-down` stops the production stack (base compose only).
 
 Branding note:
 - Put override assets in `.local/brand-assets/` and run `make apply-branding`.
@@ -193,6 +201,7 @@ make build-spis
 make apply-branding
 make dev-reload-spi
 make down
+make prod-down
 make reset
 make ps
 make logs-runtime
@@ -304,4 +313,3 @@ If Keycloak forces an "HTTPS required" error on localhost:
 ```bash
 ./kcadm.sh get realms/org-new-delhi --fields sslRequired --config .kcadm.config
 ```
-

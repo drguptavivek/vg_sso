@@ -1,4 +1,7 @@
 .kcadm.config
+.DS_Store
+__MACOSX/
+Archive.zip
 .kcadm.realm.config
 .env
 keycloak-[0-9]*/

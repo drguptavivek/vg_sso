@@ -1,6 +1,7 @@
 SHELL := /bin/bash
 
 COMPOSE := docker compose -f docker-compose.yml -f docker-compose.override.yml
+COMPOSE_PROD := docker compose -f docker-compose.yml
 
 .PHONY: help apply-branding build-spis dev-up dev-reload-spi up down reset ps logs \
 	logs-all \
@@ -65,8 +66,17 @@ up:
 	$(MAKE) build-spis
 	$(COMPOSE) up -d --build
 
+prod-up:
+	./scripts/apply_local_brand_assets.sh
+	./scripts/prepare_host_log_dir.sh
+	$(MAKE) build-spis
+	$(COMPOSE_PROD) up -d --build
+
 down:
 	$(COMPOSE) down
+
+prod-down:
+	$(COMPOSE_PROD) down
 
 reset:
 	$(COMPOSE) down -v

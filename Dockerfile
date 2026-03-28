@@ -1,4 +1,4 @@
-ARG KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:26.5.4
+ARG KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:26.5.6
 
 FROM fedora:35 AS build-tools
 RUN dnf install -y jq curl findutils \
@@ -10,6 +10,13 @@ RUN dnf install -y jq curl findutils \
 FROM ${KEYCLOAK_IMAGE}
 USER root
 WORKDIR /opt/keycloak
+
+ARG KC_DB=postgres
+ARG KC_FEATURES=admin-fine-grained-authz:v2,passkeys:v1,recovery-codes:v1,impersonation:v1
+ARG KC_HTTP_RELATIVE_PATH=/
+ARG KC_HTTP_MANAGEMENT_RELATIVE_PATH=/management
+ARG KC_HTTP_MANAGEMENT_HEALTH_ENABLED=true
+ARG KC_METRICS_ENABLED=true
 
 COPY --from=build-tools /export-libs/* /usr/lib64/
 RUN cp /usr/lib64/jq /usr/local/bin/jq && cp /usr/lib64/curl /usr/local/bin/curl && chmod +x /usr/local/bin/jq /usr/local/bin/curl
@@ -42,6 +49,12 @@ RUN find /opt/keycloak/themes -type d -exec chmod 755 {} + \
     && chmod 755 /opt/keycloak/scripts/step*.sh
 
 USER keycloak
+ENV KC_DB=${KC_DB}
+ENV KC_FEATURES=${KC_FEATURES}
+ENV KC_HTTP_RELATIVE_PATH=${KC_HTTP_RELATIVE_PATH}
+ENV KC_HTTP_MANAGEMENT_RELATIVE_PATH=${KC_HTTP_MANAGEMENT_RELATIVE_PATH}
+ENV KC_HTTP_MANAGEMENT_HEALTH_ENABLED=${KC_HTTP_MANAGEMENT_HEALTH_ENABLED}
+ENV KC_METRICS_ENABLED=${KC_METRICS_ENABLED}
 RUN /opt/keycloak/bin/kc.sh build --health-enabled=true
 
 ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
