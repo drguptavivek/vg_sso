@@ -6,7 +6,7 @@ COMPOSE_PROD := docker compose -f docker-compose.yml
 .PHONY: help apply-branding build-spis dev-up dev-reload-spi up down reset ps logs \
 	logs-all \
 	logs-runtime logs-init \
-	force-step1 force-step2 force-step3 force-step4 force-step5 force-step6 force-step7 force-step7-fgap force-step8 force-step9 maintenance audit-export \
+	force-step1 force-step2 force-step3 force-step4 force-step5 force-step6 force-step7 force-step7-fgap force-step8 force-step9 maintenance audit-export full-backup \
 	test-config test-step6 test-step7
 
 help:
@@ -35,6 +35,7 @@ help:
 	@echo "  make force-step9      Re-run step9-init (archive setup)"
 	@echo "  make maintenance      Run custom command in keycloak-maintenance (MAINT_CMD='...')"
 	@echo "  make audit-export     Run audit export now (updates watermark)"
+	@echo "  make full-backup      Dump DB and copy .env/.local into ~/sso_backups/<timestamp>"
 	@echo "  make test-config      Run live config tests profile"
 	@echo "  make test-step6       Run step6 tests profile"
 	@echo "  make test-step7       Run step7 tests profile"
@@ -131,6 +132,9 @@ maintenance:
 
 audit-export:
 	$(COMPOSE) run --rm --no-build keycloak-maintenance python3 /workspace/scripts/audit_export_events.py
+
+full-backup:
+	./scripts/full_backup.sh
 
 test-config:
 	$(COMPOSE) --profile test up --build --abort-on-container-exit --exit-code-from config-tests config-tests
