@@ -46,6 +46,70 @@ public class AccountExpiryAdminResourceProvider implements RealmResourceProvider
   }
 
   @GET
+  @Path("ui")
+  @Produces(MediaType.TEXT_HTML)
+  public Response dashboardUi() {
+    AuthContext auth = authenticateForRoles("view-users", "manage-users");
+    if (!auth.ok) {
+      String body = "<!doctype html><html><head><meta charset='utf-8'><title>Account Expiry Dashboard</title></head>"
+          + "<body style='font-family:system-ui,sans-serif;padding:24px'>"
+          + "<h1 style='margin-top:0'>Account Expiry Dashboard</h1>"
+          + "<p style='color:#b42318'>"
+          + escapeHtml(auth.message)
+          + "</p></body></html>";
+      return Response.status(auth.status).type(MediaType.TEXT_HTML_TYPE).entity(body).build();
+    }
+
+    String body = "<!doctype html>"
+        + "<html><head><meta charset='utf-8'>"
+        + "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        + "<title>Account Expiry Dashboard</title>"
+        + "<style>"
+        + "body{font-family:system-ui,sans-serif;margin:0;background:#f7f7f8;color:#161616}"
+        + ".wrap{max-width:1280px;margin:0 auto;padding:24px}"
+        + ".bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}"
+        + ".card{background:#fff;border:1px solid #d8d8d8;border-radius:8px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}"
+        + ".note{font-size:12px;background:#f5f5f5}"
+        + ".msg{margin-bottom:12px;font-size:13px}"
+        + "button{padding:8px 12px;border:1px solid #c7c7c7;background:#fff;border-radius:4px;cursor:pointer}"
+        + "table{width:100%;border-collapse:collapse;font-size:12px}"
+        + "th,td{text-align:left;border-bottom:1px solid #ddd;padding:6px;vertical-align:top}"
+        + "h1,h2{margin:0}"
+        + "h2{margin:16px 0 8px 0;font-size:18px}"
+        + "code{font-family:ui-monospace,SFMono-Regular,monospace}"
+        + "@media (max-width: 768px){.wrap{padding:16px}table{display:block;overflow:auto;white-space:nowrap}}"
+        + "</style></head>"
+        + "<body><div class='wrap'>"
+        + "<div class='bar'><div><h1>Account Expiry Dashboard</h1><div style='font-size:13px;color:#666'>Realm: "
+        + escapeHtml(auth.realm.getName())
+        + "</div></div><button type='button' id='refreshBtn'>Refresh</button></div>"
+        + "<div id='msg' class='msg'></div>"
+        + "<div class='card note' style='margin-bottom:12px'>"
+        + "Edit expiry from user profile attributes <code>account_expiry_date</code> (yyyy-MM-dd) and "
+        + "<code>account_expiry_timezone</code> (IANA, default Asia/Kolkata)."
+        + "</div>"
+        + "<div id='counts' class='card' style='margin-bottom:12px;font-size:13px'>Loading...</div>"
+        + "<div class='card'><h2>Upcoming Expirations (Next 2 Weeks)</h2><div id='upcoming'></div></div>"
+        + "<div class='card' style='margin-top:12px'><h2>Recent Expirations (Last 2 Weeks)</h2><div id='recent'></div></div>"
+        + "</div>"
+        + "<script>"
+        + "(function(){"
+        + "function esc(v){return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\\"/g,'&quot;').replace(/'/g,'&#39;');}"
+        + "function msg(text,error){var el=document.getElementById('msg');el.textContent=text||'';el.style.color=error?'#b42318':'#1f6feb';}"
+        + "function rowUrl(row){var p=String(row.adminUserPath||'');if(!/\\/settings$/.test(p))p+='/settings';return p;}"
+        + "function table(rows){if(!rows||rows.length===0)return \"<div style='font-size:12px;color:#666'>No records.</div>\";"
+        + "var html=\"<table><thead><tr><th>User Name</th><th>Designation</th><th>Email</th><th>Phone Number</th><th>Expiry Date (UTC)</th><th>Actions</th></tr></thead><tbody>\";"
+        + "for(var i=0;i<rows.length;i++){var row=rows[i];html+=\"<tr><td>\"+esc(row.displayName||row.username)+\"</td><td>\"+esc(row.designation)+\"</td><td>\"+esc(row.email)+\"</td><td>\"+esc(row.phoneNumber)+\"</td><td><code>\"+esc(row.expiryUtc)+\"</code></td><td><a href='\"+esc(rowUrl(row))+\"' target='_blank' rel='noopener'>Open User</a></td></tr>\";}"
+        + "return html+\"</tbody></table>\";}"
+        + "async function load(){msg('Loading...');try{var res=await fetch('expirations?windowDays=14',{credentials:'include'});var data=await res.json().catch(function(){return {};});if(!res.ok){msg((data&&data.error)||('Failed ('+res.status+')'),true);return;}document.getElementById('counts').innerHTML='Upcoming: <b>' + (((data.counts||{}).upcoming)||0) + '</b> | Recent: <b>' + (((data.counts||{}).recent)||0) + '</b>';document.getElementById('upcoming').innerHTML=table(data.upcoming||[]);document.getElementById('recent').innerHTML=table(data.recent||[]);msg('Loaded.');}catch(e){msg(String(e),true);}}"
+        + "document.getElementById('refreshBtn').addEventListener('click',load);load();"
+        + "})();"
+        + "</script></body></html>";
+
+    return Response.ok(body).type(MediaType.TEXT_HTML_TYPE).build();
+  }
+
+  @GET
   @Path("timezones")
   @Produces(MediaType.APPLICATION_JSON)
   public Response listTimezones() {
@@ -327,6 +391,18 @@ public class AccountExpiryAdminResourceProvider implements RealmResourceProvider
   private static String joinName(String firstName, String lastName) {
     String v = (nullToEmpty(firstName) + " " + nullToEmpty(lastName)).trim();
     return v;
+  }
+
+  private static String escapeHtml(String value) {
+    if (value == null) {
+      return "";
+    }
+    return value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&#39;");
   }
 
   public static final class SetExpiryRequest {
