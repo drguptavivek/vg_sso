@@ -42,9 +42,7 @@
     var path = getUiPath();
     if (!path) return;
     getPublicOrigin().then(function (origin) {
-      var target = origin + path;
-      var win = window.open(target, "_blank", "noopener");
-      if (!win) window.location.href = target;
+      window.location.href = origin + path;
     });
   }
 
@@ -54,25 +52,43 @@
     var navList = document.querySelector(".pf-v5-c-nav__list, .pf-c-nav__list");
     if (!navList) return;
 
-    var li = document.createElement("li");
-    li.className = "pf-v5-c-nav__item pf-c-nav__item";
-    li.style.marginTop = "auto";
+    var host = navList.parentElement || navList;
+    host.style.display = "flex";
+    host.style.flexDirection = "column";
+    host.style.minHeight = "100%";
 
-    var a = document.createElement("a");
-    a.id = LINK_ID;
-    a.href = "#";
-    a.className = "pf-v5-c-nav__link pf-c-nav__link";
-    a.innerHTML =
+    var footer = document.createElement("div");
+    footer.style.marginTop = "auto";
+    footer.style.paddingTop = "8px";
+
+    var button = document.createElement("button");
+    button.type = "button";
+    button.id = LINK_ID;
+    button.setAttribute("aria-label", "Account Expiry");
+    button.style.width = "100%";
+    button.style.border = "0";
+    button.style.background = "transparent";
+    button.style.cursor = "pointer";
+    button.style.textAlign = "left";
+    button.style.display = "flex";
+    button.style.alignItems = "center";
+    button.style.padding = "10px 16px";
+    button.style.color = "inherit";
+    button.style.font = "inherit";
+    button.innerHTML =
       "<span aria-hidden='true' style='display:inline-flex;width:14px;height:14px;margin-right:8px;vertical-align:text-bottom'>" +
       "<svg viewBox='0 0 24 24' width='14' height='14' fill='currentColor' xmlns='http://www.w3.org/2000/svg'><path d='M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 15-4-4 1.4-1.4 2.6 2.58 5.6-5.58L18 9l-7 7z'/></svg>" +
       "</span><span>Account Expiry</span>";
-    a.addEventListener("click", function (e) {
-      e.preventDefault();
-      openDashboard();
+    ["pointerdown", "mousedown", "mouseup"].forEach(function (eventName) {
+      button.addEventListener(eventName, swallowEvent, true);
     });
+    button.addEventListener("click", function (e) {
+      swallowEvent(e);
+      openDashboard();
+    }, true);
 
-    li.appendChild(a);
-    navList.appendChild(li);
+    footer.appendChild(button);
+    host.appendChild(footer);
   }
 
   function boot() {
@@ -87,3 +103,8 @@
     boot();
   }
 })();
+    function swallowEvent(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+    }

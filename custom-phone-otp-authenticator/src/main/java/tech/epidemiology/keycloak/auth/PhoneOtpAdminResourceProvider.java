@@ -170,6 +170,189 @@ public class PhoneOtpAdminResourceProvider implements RealmResourceProvider {
   }
 
   @GET
+  @Path("pending-ui")
+  @Produces(MediaType.TEXT_HTML)
+  public Response pendingUi() {
+    AuthContext auth = authenticateAdminContext();
+    if (!auth.authenticated) {
+      return Response.status(auth.status)
+          .entity("<h3>Forbidden</h3><p>" + escapeHtml(auth.message) + "</p>")
+          .type(MediaType.TEXT_HTML)
+          .build();
+    }
+    if (!(auth.manageRealm || auth.userManager)) {
+      return Response.status(Response.Status.FORBIDDEN)
+          .entity("<h3>Forbidden</h3><p>manage-realm or user-manager role is required.</p>")
+          .type(MediaType.TEXT_HTML)
+          .build();
+    }
+
+    String html = """
+        <!doctype html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Phone OTP Status</title>
+          <style>
+            body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#f7f7f8;color:#161616}
+            .wrap{max-width:1280px;margin:0 auto;padding:24px}
+            .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+            .summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px}
+            .card{background:#fff;border:1px solid #d8d8d8;border-radius:8px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+            .stat-label{font-size:12px;color:#666}
+            .stat-value{font-size:22px;font-weight:600}
+            .toolbar{display:grid;grid-template-columns:1fr 100px auto auto auto;gap:8px;align-items:end;margin-bottom:12px}
+            label{display:block;font-size:12px;margin-bottom:4px}
+            input{width:100%%;box-sizing:border-box;padding:8px;border:1px solid #bbb;border-radius:6px}
+            button{padding:8px 12px;border:1px solid #c7c7c7;background:#fff;border-radius:6px;cursor:pointer}
+            .primary{background:#0b5fff;color:#fff;border-color:#0b5fff}
+            .table-wrap{max-height:62vh;overflow:auto;border:1px solid #ddd;border-radius:8px;background:#fff}
+            table{width:100%%;border-collapse:collapse;font-size:13px}
+            th,td{text-align:left;padding:10px;border-bottom:1px solid #eee;vertical-align:top}
+            thead th{position:sticky;top:0;background:#f8f8f8;z-index:1}
+            .pager{display:flex;align-items:center;gap:8px;margin-top:10px}
+            .status{margin-top:8px;font-size:12px;color:#666}
+            @media (max-width: 900px){.summary{grid-template-columns:1fr}.toolbar{grid-template-columns:1fr 1fr}.toolbar .fill{grid-column:1/-1}}
+          </style>
+        </head>
+        <body>
+          <div class="wrap">
+            <div class="bar">
+              <div>
+                <h1 style="margin:0;font-size:28px">Phone OTP Status</h1>
+                <div style="font-size:13px;color:#666">Realm: %s</div>
+              </div>
+              <button type="button" id="reloadBtn" class="primary">Reload</button>
+            </div>
+            <div class="summary">
+              <div class="card"><div class="stat-label">Total Users</div><div class="stat-value" id="totalUsers">-</div></div>
+              <div class="card"><div class="stat-label">Phone Verified</div><div class="stat-value" id="verifiedUsers">-</div></div>
+              <div class="card"><div class="stat-label">Pending Verification</div><div class="stat-value" id="pendingUsers">-</div></div>
+            </div>
+            <div class="toolbar">
+              <div class="fill">
+                <label for="search">Search username or mobile</label>
+                <input id="search" placeholder="Search...">
+              </div>
+              <div>
+                <label for="pageSize">Rows</label>
+                <input id="pageSize" value="25">
+              </div>
+              <button type="button" id="searchBtn">Search</button>
+              <button type="button" id="clearBtn">Clear</button>
+              <button type="button" id="reloadBtn2" class="primary">Reload</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Username</th><th>Name</th><th>Email</th><th>Mobile</th><th>Enabled</th><th>Profile</th></tr>
+                </thead>
+                <tbody id="rows"><tr><td colspan="6">Loading...</td></tr></tbody>
+              </table>
+            </div>
+            <div class="pager">
+              <button type="button" id="prevBtn">Prev</button>
+              <button type="button" id="nextBtn">Next</button>
+              <div id="pageInfo" style="margin-left:auto;font-size:13px">Page 1 / 1</div>
+            </div>
+            <div id="status" class="status">Ready</div>
+          </div>
+          <script>
+            (function () {
+              var state = { page: 1, pageSize: 25, totalFiltered: 0 };
+
+              function esc(value) {
+                return String(value || '')
+                  .replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#39;');
+              }
+
+              function getProfileUrl(row) {
+                var p = String(row.adminUserPath || '');
+                if (!/\\/settings$/.test(p)) p += '/settings';
+                return p;
+              }
+
+              function renderRows(users) {
+                var tbody = document.getElementById('rows');
+                tbody.innerHTML = '';
+                if (!users || !users.length) {
+                  tbody.innerHTML = "<tr><td colspan='6'>No users found.</td></tr>";
+                  return;
+                }
+                for (var i = 0; i < users.length; i++) {
+                  var u = users[i];
+                  var tr = document.createElement('tr');
+                  tr.innerHTML =
+                    "<td>" + esc(u.username) + "</td>" +
+                    "<td>" + esc(((u.firstName || '') + ' ' + (u.lastName || '')).trim()) + "</td>" +
+                    "<td>" + esc(u.email) + "</td>" +
+                    "<td>" + esc(u.mobile) + "</td>" +
+                    "<td>" + (u.enabled ? "true" : "false") + "</td>" +
+                    "<td><a href='" + esc(getProfileUrl(u)) + "' target='_blank' rel='noopener'>Open</a></td>";
+                  tbody.appendChild(tr);
+                }
+              }
+
+              async function load() {
+                var pageSize = Math.max(5, Number(document.getElementById('pageSize').value || 25));
+                state.pageSize = pageSize;
+                var first = (state.page - 1) * state.pageSize;
+                var q = (document.getElementById('search').value || '').trim();
+                var status = document.getElementById('status');
+                status.textContent = 'Loading users...';
+                try {
+                  var url = 'pending-users?first=' + encodeURIComponent(first) + '&max=' + encodeURIComponent(state.pageSize) + '&q=' + encodeURIComponent(q);
+                  var res = await fetch(url, { credentials: 'include' });
+                  var data = await res.json().catch(function () { return {}; });
+                  if (!res.ok || !data || !data.ok) {
+                    status.textContent = (data && data.error) || ('Failed (' + res.status + ')');
+                    renderRows([]);
+                    return;
+                  }
+                  document.getElementById('totalUsers').textContent = String(data.totalUsers || 0);
+                  document.getElementById('verifiedUsers').textContent = String(data.verifiedUsers || 0);
+                  document.getElementById('pendingUsers').textContent = String(data.pendingUsers || 0);
+                  state.totalFiltered = Number(data.filteredPendingUsers || data.pendingUsers || 0);
+                  renderRows(data.users || []);
+                  var totalPages = Math.max(1, Math.ceil(state.totalFiltered / state.pageSize));
+                  var start = state.totalFiltered === 0 ? 0 : ((state.page - 1) * state.pageSize + 1);
+                  var end = Math.min(state.page * state.pageSize, state.totalFiltered);
+                  document.getElementById('pageInfo').textContent = 'Page ' + state.page + ' / ' + totalPages + ' • Showing ' + start + '-' + end + ' of ' + state.totalFiltered;
+                  document.getElementById('prevBtn').disabled = state.page <= 1;
+                  document.getElementById('nextBtn').disabled = state.page >= totalPages;
+                  status.textContent = 'Loaded page ' + state.page + ' (' + (data.count || 0) + ' rows).';
+                } catch (e) {
+                  status.textContent = String(e);
+                  renderRows([]);
+                }
+              }
+
+              document.getElementById('searchBtn').addEventListener('click', function () { state.page = 1; load(); });
+              document.getElementById('clearBtn').addEventListener('click', function () { document.getElementById('search').value = ''; state.page = 1; load(); });
+              document.getElementById('reloadBtn').addEventListener('click', function () { state.page = 1; load(); });
+              document.getElementById('reloadBtn2').addEventListener('click', function () { state.page = 1; load(); });
+              document.getElementById('prevBtn').addEventListener('click', function () { if (state.page > 1) { state.page -= 1; load(); } });
+              document.getElementById('nextBtn').addEventListener('click', function () {
+                var totalPages = Math.max(1, Math.ceil(state.totalFiltered / state.pageSize));
+                if (state.page < totalPages) { state.page += 1; load(); }
+              });
+              document.getElementById('search').addEventListener('keydown', function (e) { if (e.key === 'Enter') { state.page = 1; load(); } });
+              document.getElementById('pageSize').addEventListener('change', function () { state.page = 1; load(); });
+              load();
+            })();
+          </script>
+        </body>
+        </html>
+        """.formatted(escapeHtml(auth.realm.getName()));
+    return Response.ok(html).type(MediaType.TEXT_HTML_TYPE).build();
+  }
+
+  @GET
   @Path("access")
   @Produces(MediaType.APPLICATION_JSON)
   public Response access() {
@@ -433,6 +616,18 @@ public class PhoneOtpAdminResourceProvider implements RealmResourceProvider {
 
   private static String defaultIfBlank(String v, String d) {
     return isBlank(v) ? d : v;
+  }
+
+  private static String escapeHtml(String value) {
+    if (value == null) {
+      return "";
+    }
+    return value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&#39;");
   }
 
   public static class TestSmsRequest {

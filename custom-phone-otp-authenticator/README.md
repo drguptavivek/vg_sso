@@ -69,6 +69,34 @@ Quick UI with Test OTP button:
 
 `GET /realms/{realm}/phone-otp-admin/ui`
 
+Pending verification status UI:
+
+`GET /realms/{realm}/phone-otp-admin/pending-ui`
+
+Pending verification JSON feed:
+
+`GET /realms/{realm}/phone-otp-admin/pending-users`
+
+Access probe for admin theme integration:
+
+`GET /realms/{realm}/phone-otp-admin/access`
+
+## Split-host admin note
+
+In deployments where:
+
+- login/session traffic uses a public host such as `sso1.aiims.edu.in`
+- admin console traffic uses a separate host such as `ssoadmin.aiims.edu.in`
+
+the old modal-based admin-theme helpers are not reliable, because browser cookies are scoped to the public/login host. For that reason the current admin theme uses `phone-otp-menu.v2.js`, which navigates to helper pages on the public realm origin instead of making modal `fetch()` calls from the admin host.
+
+Current expected admin actions are:
+
+1. `Phone OTP Status`
+2. `Phone OTP Test`
+
+`Phone OTP Status` opens the pending verification page, and `Phone OTP Test` opens the OTP test page.
+
 CLI flow:
 
 ```bash

@@ -28,6 +28,7 @@ services:
         KC_HTTP_MANAGEMENT_RELATIVE_PATH: ${KC_HTTP_MANAGEMENT_RELATIVE_PATH:-/management}
         KC_HTTP_MANAGEMENT_HEALTH_ENABLED: ${KC_HTTP_MANAGEMENT_HEALTH_ENABLED:-true}
         KC_METRICS_ENABLED: ${KC_METRICS_ENABLED:-true}
+        THEME_ASSET_VERSION: ${THEME_ASSET_VERSION:-dev1}
     container_name: vg-keycloak
     restart: unless-stopped
     depends_on:

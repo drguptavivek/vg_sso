@@ -1,6 +1,6 @@
 # Implementation Note: Step 4 Phone OTP Flow
 
-Step 4 provisions the SMS OTP browser flow and the supporting admin-theme integration for OTP operations.
+Step 4 provisions the SMS OTP browser flow and the supporting admin-helper integration for OTP operations.
 
 ## Automation entrypoint
 
@@ -34,6 +34,7 @@ Step 4 also:
 - configures the custom authenticator execution
 - binds `browser-PhoneOTP` as the active browser flow
 - sets `adminTheme=admin-vg-custom`
+- enables Phone OTP admin helper entry points in the admin theme
 
 ## OTP configuration seeded by bootstrap
 
@@ -55,6 +56,31 @@ The seeded bearer value is a placeholder and should be updated appropriately for
 Current Step 4 is about the browser flow only.
 
 It does not currently provision a dedicated SMS OTP direct-grant flow in the bootstrap scripts.
+
+## Admin helper UI behavior
+
+The Phone OTP helper is intentionally split from the in-console modal flow when running with separate public and admin hostnames.
+
+Current expected admin sidebar actions are:
+
+1. `Phone OTP Status`
+2. `Phone OTP Test`
+3. `Account Expiry`
+
+For split-host deployments such as:
+
+- login/session host: `sso1.aiims.edu.in`
+- admin console host: `ssoadmin.aiims.edu.in`
+
+the helper actions must navigate on the public realm origin rather than using in-console modal `fetch()` calls. The reason is that browser session cookies are scoped to the login/session host, so modal XHR calls from the admin host fail with `401 Unauthorized`.
+
+Accordingly, the active admin theme scripts use the `*.v2.js` helper launchers, which navigate to:
+
+- `Phone OTP Test` -> `/realms/{realm}/phone-otp-admin/ui`
+- `Phone OTP Status` -> `/realms/{realm}/phone-otp-admin/pending-ui`
+- `Account Expiry` -> `/realms/{realm}/account-expiry-admin/ui`
+
+These helper pages run as separate pages under the public realm origin and therefore retain the expected session/cookie behavior in split-host deployments.
 
 ## Runtime behavior
 
@@ -93,4 +119,7 @@ After Step 4, verify:
 - `browserFlow` for the realm is `browser-PhoneOTP`
 - `phone-otp-authenticator` exists in the forms subflow
 - `adminTheme` is `admin-vg-custom`
-- the Phone OTP admin menu is visible in the admin console
+- the admin sidebar shows `Phone OTP Status`, `Phone OTP Test`, and `Account Expiry`
+- each helper action opens cleanly in the same tab
+- `Phone OTP Status` loads pending verification data
+- `Phone OTP Test` loads the OTP test helper page

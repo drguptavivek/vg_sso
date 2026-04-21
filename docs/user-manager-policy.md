@@ -91,7 +91,7 @@ The `manage` scope on `Users` allows creating and editing user records. The abse
 `user-manager` users have access to the Phone OTP admin extension in the admin console:
 
 - View **Pending Phone OTP** dashboard (users with unverified phone numbers)
-- Open **Phone OTP Test** modal to send a test SMS
+- Open the **Phone OTP Test** helper page to send a test SMS
 - Generate a short-lived test token (`/realms/{realm}/phone-otp-admin/token`)
 
 Access check endpoint:
