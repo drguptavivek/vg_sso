@@ -232,11 +232,13 @@ echo "STEP1: applying realm themes ..."
 kcadm update "realms/${NEW_REALM_NAME}" \
   -s loginTheme=vg \
   -s accountTheme=vg \
+  -s emailTheme=vg \
   -s adminTheme=admin-vg-custom >/dev/null
 kcadm update "realms/${MASTER_REALM}" \
   -s sslRequired="$SSL_REQUIRED" \
   -s loginTheme=vg-master \
   -s accountTheme=vg-master \
+  -s emailTheme=vg-master \
   -s adminTheme=vg-master >/dev/null
 
 if [[ "$STEP1_RETIRE_BOOTSTRAP_ADMIN" == "true" && "$BOOT_USER" != "$MASTER_ADMIN_USER" ]]; then

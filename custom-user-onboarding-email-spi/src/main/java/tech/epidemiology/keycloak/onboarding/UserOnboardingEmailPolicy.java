@@ -109,6 +109,18 @@ final class UserOnboardingEmailPolicy {
         return Set.copyOf(realms);
     }
 
+    static String publicBaseUrl(Config.Scope config, Map<String, String> env) {
+        String configured = trimToNull(config == null ? null : config.get("publicBaseUrl"));
+        if (configured != null) {
+            return configured;
+        }
+        configured = trimToNull(env.get("KC_HOSTNAME"));
+        if (configured != null) {
+            return configured;
+        }
+        return trimToNull(env.get("KC_SPI_EVENTS_LISTENER_USER_ONBOARDING_EMAIL_PUBLIC_BASE_URL"));
+    }
+
     private static void addAll(Collection<String> target, String[] values) {
         if (values == null) {
             return;

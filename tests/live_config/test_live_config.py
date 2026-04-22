@@ -121,6 +121,7 @@ class LiveConfigValidationTests(unittest.TestCase):
         self.assertTrue(self.realm_data["enabled"])
         self.assertEqual(self.realm_data["loginTheme"], "vg")
         self.assertEqual(self.realm_data["accountTheme"], "vg")
+        self.assertEqual(self.realm_data["emailTheme"], "vg")
         self.assertEqual(self.realm_data["adminTheme"], "admin-vg-custom")
 
     def test_master_realm_themes_are_applied(self) -> None:
@@ -129,6 +130,7 @@ class LiveConfigValidationTests(unittest.TestCase):
         master_realm_data = self.context["master_realm_data"]
         self.assertEqual(master_realm_data["loginTheme"], "vg-master")
         self.assertEqual(master_realm_data["accountTheme"], "vg-master")
+        self.assertEqual(master_realm_data["emailTheme"], "vg-master")
         self.assertEqual(master_realm_data["adminTheme"], "vg-master")
 
     def test_admin_users_exist(self) -> None:

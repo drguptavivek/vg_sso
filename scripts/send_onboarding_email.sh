@@ -94,7 +94,7 @@ if [[ -z "$TARGET_USER_ID" ]]; then
 fi
 
 docker exec "$CONTAINER_NAME" /bin/bash -lc \
-  "printf '%s' '[\"VERIFY_EMAIL\",\"UPDATE_PASSWORD\"]' > /tmp/send-onboarding-actions.json \
+  "printf '%s' '[\"VERIFY_EMAIL\",\"UPDATE_PASSWORD\",\"CONFIGURE_TOTP\",\"CONFIGURE_RECOVERY_AUTHN_CODES\"]' > /tmp/send-onboarding-actions.json \
     && /opt/keycloak/bin/kcadm.sh update users/${TARGET_USER_ID}/execute-actions-email -r ${REALM@Q} --config ${KCADM_CONFIG@Q} -q lifespan=${LIFESPAN_SECONDS@Q} -f /tmp/send-onboarding-actions.json -n >/dev/null"
 
 echo "Onboarding email triggered for user id: $TARGET_USER_ID"

@@ -437,15 +437,16 @@ def evaluate_controls(context: dict) -> list[ControlResult]:
             "realm-themes",
             "theme",
             "low",
-            "PASS"
-            if realm_data.get("loginTheme") == "vg"
-            and realm_data.get("accountTheme") == "vg"
-            and realm_data.get("adminTheme") == "admin-vg-custom"
-            else "FAIL",
-            "VG realm themes applied",
-            f"loginTheme={realm_data.get('loginTheme')} accountTheme={realm_data.get('accountTheme')} adminTheme={realm_data.get('adminTheme')}",
+                "PASS"
+                if realm_data.get("loginTheme") == "vg"
+                and realm_data.get("accountTheme") == "vg"
+                and realm_data.get("emailTheme") == "vg"
+                and realm_data.get("adminTheme") == "admin-vg-custom"
+                else "FAIL",
+                "VG realm themes applied",
+                f"loginTheme={realm_data.get('loginTheme')} accountTheme={realm_data.get('accountTheme')} emailTheme={realm_data.get('emailTheme')} adminTheme={realm_data.get('adminTheme')}",
+            )
         )
-    )
 
     master_realm_data = context.get("master_realm_data")
     if master_realm_data:
@@ -457,10 +458,11 @@ def evaluate_controls(context: dict) -> list[ControlResult]:
                 "PASS"
                 if master_realm_data.get("loginTheme") == "vg-master"
                 and master_realm_data.get("accountTheme") == "vg-master"
+                and master_realm_data.get("emailTheme") == "vg-master"
                 and master_realm_data.get("adminTheme") == "vg-master"
                 else "FAIL",
                 "Master realm themes applied",
-                f"loginTheme={master_realm_data.get('loginTheme')} accountTheme={master_realm_data.get('accountTheme')} adminTheme={master_realm_data.get('adminTheme')}",
+                f"loginTheme={master_realm_data.get('loginTheme')} accountTheme={master_realm_data.get('accountTheme')} emailTheme={master_realm_data.get('emailTheme')} adminTheme={master_realm_data.get('adminTheme')}",
             )
         )
 
