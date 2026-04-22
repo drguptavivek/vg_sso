@@ -7,13 +7,13 @@
 
 ## 1. Purpose
 
-Browser SSO logins require a one-time password (OTP) delivered via SMS to the user's registered mobile number. This provides a second authentication factor using the phone number already verified during registration. The SMS OTP step sits immediately after username/password validation in the browser flow.
+Browser SSO logins require a one-time password (OTP) delivered via SMS to the user's registered mobile number. This provides a second authentication factor tied to the stored phone number. The SMS OTP step sits immediately after username/password validation in the browser flow.
 
 ---
 
 ## 2. Authentication Flow Position
 
-### Browser flow (`browser-PhoneOTP`)
+### Browser flow (`browser-PhoneOTP-with-2FA`)
 
 ```
 auth-cookie                        (ALTERNATIVE)
@@ -22,15 +22,35 @@ identity-provider-redirector       (ALTERNATIVE)
 Organization sub-flow              (CONDITIONAL)
 forms sub-flow:
   ├── auth-username-password-form  (REQUIRED)  ← priority 10
+  ├── account-expiry-check         (REQUIRED)  ← priority 12
   ├── phone-otp-authenticator      (REQUIRED)  ← priority 15  ← SMS OTP
   └── Browser - Conditional 2FA   (CONDITIONAL) ← priority 20
         ├── conditional-user-configured
         ├── conditional-credential
-        ├── auth-otp-form          (REQUIRED)
-        └── webauthn-authenticator
+        ├── auth-otp-form          (ALTERNATIVE)
+        ├── auth-recovery-authn-code-form (ALTERNATIVE)
+        └── webauthn-authenticator (DISABLED)
 ```
 
-The SMS OTP step runs **after** password validation and **before** TOTP/WebAuthn 2FA. A user who has not verified their phone number cannot complete login.
+The SMS OTP step runs **after** password validation and **before** TOTP/recovery-code verification. A user who has not verified their phone number cannot complete login.
+
+Important:
+- The bootstrap script currently creates `browser-PhoneOTP`.
+- The live flow `browser-PhoneOTP-with-2FA` is a manually created or manually modified variant unless and until it is added to bootstrap automation.
+- If this variant is the intended standard, it should be codified in `step4-init` rather than left as a live-only change.
+
+### Onboarding relationship
+
+SMS OTP is part of the browser login flow, not the email-link onboarding action chain.
+
+The onboarding email flow is expected to handle:
+
+- `VERIFY_EMAIL`
+- `UPDATE_PASSWORD`
+- `CONFIGURE_TOTP`
+- `CONFIGURE_RECOVERY_AUTHN_CODES`
+
+After those actions complete, the user returns to normal login, where SMS OTP runs before the authenticator-app TOTP or recovery-code step.
 
 ### Direct grant status
 
@@ -178,7 +198,9 @@ docker compose -f docker-compose.yml -f docker-compose.override.yml up -d keyclo
 ```bash
 docker exec vg-keycloak /opt/keycloak/bin/kcadm.sh get realms/org-new-delhi \
   --fields browserFlow --config /tmp/kcadm.config
-# Expected: "browserFlow": "browser-PhoneOTP"
+# Bootstrap default today: "browserFlow": "browser-PhoneOTP"
+# If your live realm uses the manual 2FA variant, you may instead see:
+# "browserFlow": "browser-PhoneOTP-with-2FA"
 ```
 
 ### 8.4 Troubleshooting

@@ -289,6 +289,23 @@ services:
     working_dir: /workspace
     command: [ "/bin/bash", "/workspace/scripts/step9_audit_archival_setup.sh" ]
 
+  step10-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vg-step10-init
+    restart: "no"
+    depends_on:
+      step9-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP10_FORCE: ${STEP10_FORCE:-false}
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step10_user_onboarding_setup.sh" ]
+
   keycloak-maintenance:
     build:
       context: .
@@ -354,7 +371,7 @@ services:
     restart: "no"
     profiles: [ "test" ]
     depends_on:
-      step9-init:
+      step10-init:
         condition: service_completed_successfully
       nginx-proxy:
         condition: service_started
@@ -388,7 +405,7 @@ services:
       - ./tests/spi_coverage:/workspace/reports
     working_dir: /workspace
     command: >
-      /bin/sh -c " mvn test -f custom-account-expiry-spi/pom.xml && cp -r custom-account-expiry-spi/target/site/jacoco/. reports/custom-account-expiry-spi/ && mvn test -f custom-group-attr-mapper/pom.xml && cp -r custom-group-attr-mapper/target/site/jacoco/. reports/custom-group-attr-mapper/ && mvn test -f custom-phone-otp-authenticator/pom.xml && cp -r custom-phone-otp-authenticator/target/site/jacoco/. reports/custom-phone-otp-authenticator/ && mvn test -f custom-password-phrase-policy-spi/pom.xml && cp -r custom-password-phrase-policy-spi/target/site/jacoco/. reports/custom-password-phrase-policy-spi/ && mvn test -f custom-failure-logs-event-listener-spi/pom.xml && cp -r custom-failure-logs-event-listener-spi/target/site/jacoco/. reports/custom-failure-logs-event-listener-spi/ "
+      /bin/sh -c " mvn test -f custom-account-expiry-spi/pom.xml && cp -r custom-account-expiry-spi/target/site/jacoco/. reports/custom-account-expiry-spi/ && mvn test -f custom-group-attr-mapper/pom.xml && cp -r custom-group-attr-mapper/target/site/jacoco/. reports/custom-group-attr-mapper/ && mvn test -f custom-phone-otp-authenticator/pom.xml && cp -r custom-phone-otp-authenticator/target/site/jacoco/. reports/custom-phone-otp-authenticator/ && mvn test -f custom-password-phrase-policy-spi/pom.xml && cp -r custom-password-phrase-policy-spi/target/site/jacoco/. reports/custom-password-phrase-policy-spi/ && mvn test -f custom-failure-logs-event-listener-spi/pom.xml && cp -r custom-failure-logs-event-listener-spi/target/site/jacoco/. reports/custom-failure-logs-event-listener-spi/ && mvn test -f custom-user-onboarding-email-spi/pom.xml && cp -r custom-user-onboarding-email-spi/target/site/jacoco/. reports/custom-user-onboarding-email-spi/ "
 
   step6-test:
     build:

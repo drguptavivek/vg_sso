@@ -16,6 +16,7 @@ DEFAULT_MODULES=(
   "custom-delegated-admin-guard-spi"
   "custom-password-phrase-policy-spi"
   "custom-failure-logs-event-listener-spi"
+  "custom-user-onboarding-email-spi"
 )
 
 usage() {

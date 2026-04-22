@@ -72,11 +72,13 @@ Realm roles define broad responsibilities, FGAP narrows the admin surface, the A
 
 - Realm bootstrap, branding, and admin-user provisioning.
 - Realm security baseline, required actions, SMTP, user-profile fields, and group import.
-- Layered browser authentication with account expiry enforcement and SMS OTP support.
+- Automatic onboarding email for admin-created users using Keycloak action links for email verification, password setup, TOTP enrollment, and recovery-code generation.
+- Layered browser authentication with account expiry enforcement, SMS OTP, and conditional TOTP or recovery-code verification.
 - Delegated admin roles and fine-grained admin permissions for user and client administration.
 - Controlled token claims and custom protocol mappers.
 - Auditor-oriented role/config setup, 270-day event retention baseline, and audit export workflow.
 - Full user-event logging baseline, plus structured failure-only authentication logging and host-mounted log persistence.
+- Forgot-password fallback enabled for lost or expired onboarding links.
 
 ## Customizations summary
 
@@ -87,7 +89,7 @@ From an end-user and operator perspective, this setup already includes more than
 - Hardened realm defaults including password policy, brute-force protection, token/session settings, and audit events.
 - Extended user profile fields for organization-specific identity data such as phone number, employee metadata, designation, posts, and remarks.
 - Imported organization group hierarchy and group attributes.
-- Layered browser authentication with phone verification state, SMS OTP, and timezone-aware account-expiry enforcement.
+- Layered browser authentication with phone verification state, SMS OTP, authenticator-app TOTP or recovery-code verification, and timezone-aware account-expiry enforcement.
 - Delegated administration roles and FGAP-based permissions for user management and client administration without handing out full realm-admin access.
 - Controlled OIDC claim shaping through custom protocol mappers and curated client scopes such as `org-minimal` and `detail-profile`.
 - App-role and default-role bootstrap so newly created users and delegated admins start from a governed baseline.
@@ -105,6 +107,7 @@ This repo currently contains these custom provider modules:
 - `custom-delegated-admin-guard-spi`
 - `custom-password-phrase-policy-spi`
 - `custom-failure-logs-event-listener-spi`
+- `custom-user-onboarding-email-spi`
 
 ## Prerequisites
 

@@ -21,6 +21,7 @@ class LiveConfigValidationTests(unittest.TestCase):
         cls.realm = cls.context["realm"]
         cls.client = cls.context["realm_client"]
         cls.realm_data = cls.context["realm_data"]
+        cls.events_config = cls.context["events_config"]
         cls.required_actions = cls.context["required_actions"]
         cls.user_profile = cls.context["user_profile"]
         cls.clients = cls.context["clients"]
@@ -176,6 +177,7 @@ class LiveConfigValidationTests(unittest.TestCase):
         self.assertFalse(self.realm_data["registrationAllowed"])
         self.assertFalse(self.realm_data["rememberMe"])
         self.assertTrue(self.realm_data["verifyEmail"])
+        self.assertTrue(self.realm_data["resetPasswordAllowed"])
         self.assertFalse(self.realm_data["loginWithEmailAllowed"])
         self.assertTrue(self.realm_data["bruteForceProtected"])
         self.assertFalse(self.realm_data["permanentLockout"])
@@ -211,6 +213,7 @@ class LiveConfigValidationTests(unittest.TestCase):
         self.assertTrue(self.realm_data["eventsEnabled"])
         self.assertTrue(self.realm_data["adminEventsEnabled"])
         self.assertTrue(self.realm_data["adminEventsDetailsEnabled"])
+        self.assertIn("user-onboarding-email", set(self.events_config["eventsListeners"]))
 
         enabled_event_types = set(self.realm_data["enabledEventTypes"])
         for event_type in (
@@ -234,6 +237,45 @@ class LiveConfigValidationTests(unittest.TestCase):
         self.assertTrue(action_map["VERIFY_EMAIL"]["defaultAction"])
         self.assertTrue(action_map["UPDATE_PASSWORD"]["enabled"])
         self.assertTrue(action_map["UPDATE_PASSWORD"]["defaultAction"])
+
+    def test_admin_created_user_triggers_onboarding_marker(self) -> None:
+        suffix = uuid.uuid4().hex[:8]
+        username = f"onboarding-user-{suffix}"
+        created_user_id = None
+        try:
+            status, headers, _ = self.client.post(
+                f"/admin/realms/{self.realm}/users",
+                json_body={
+                    "username": username,
+                    "enabled": True,
+                    "email": f"{username}@example.org",
+                    "firstName": "Onboard",
+                    "lastName": "User",
+                    "emailVerified": False,
+                },
+            )
+            self.assertIn(status, {201, 204})
+            created_user_id = headers["Location"].rstrip("/").split("/")[-1]
+
+            deadline = time.time() + 15
+            onboarding_user = None
+            while time.time() < deadline:
+                onboarding_user = self.client.get(f"/admin/realms/{self.realm}/users/{created_user_id}")
+                attrs = onboarding_user.get("attributes", {})
+                if attrs.get("onboarding_email_sent_at"):
+                    break
+                time.sleep(1)
+
+            self.assertIsNotNone(onboarding_user)
+            attrs = onboarding_user.get("attributes", {})
+            self.assertIn("onboarding_email_sent_at", attrs)
+            self.assertTrue(attrs["onboarding_email_sent_at"][0])
+            self.assertIn("VERIFY_EMAIL", onboarding_user.get("requiredActions", []))
+            self.assertIn("UPDATE_PASSWORD", onboarding_user.get("requiredActions", []))
+            self.assertFalse(onboarding_user.get("emailVerified"))
+        finally:
+            if created_user_id:
+                self.client.delete(f"/admin/realms/{self.realm}/users/{created_user_id}")
 
     def test_client_hardening_matches_step_scripts(self) -> None:
         admin_cli = None

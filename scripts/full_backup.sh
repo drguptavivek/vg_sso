@@ -26,7 +26,6 @@ KC_DB_USERNAME="$(get_env_value KC_DB_USERNAME)"
 KC_DB_NAME="$(get_env_value KC_DB_NAME)"
 KC_NEW_REALM_NAME="$(get_env_value KC_NEW_REALM_NAME)"
 KC_HOSTNAME="$(get_env_value KC_HOSTNAME)"
-KC_HOSTNAME_ADMIN="$(get_env_value KC_HOSTNAME_ADMIN)"
 
 : "${KC_DB_USERNAME:?KC_DB_USERNAME is required in .env}"
 : "${KC_DB_NAME:?KC_DB_NAME is required in .env}"
@@ -53,7 +52,6 @@ db_name=${KC_DB_NAME}
 db_user=${KC_DB_USERNAME}
 realm=${KC_NEW_REALM_NAME:-}
 hostname=${KC_HOSTNAME:-}
-hostname_admin=${KC_HOSTNAME_ADMIN:-}
 EOF
 
 (

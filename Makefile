@@ -6,7 +6,7 @@ COMPOSE_PROD := docker compose -f docker-compose.yml
 .PHONY: help apply-branding build-spis dev-up dev-reload-spi up down reset ps logs \
 	logs-all \
 	logs-runtime logs-init \
-	force-step1 force-step2 force-step3 force-step4 force-step5 force-step6 force-step7 force-step7-fgap force-step8 force-step9 maintenance audit-export full-backup \
+	force-step1 force-step2 force-step3 force-step4 force-step5 force-step6 force-step7 force-step7-fgap force-step8 force-step9 force-step10 maintenance audit-export full-backup \
 	test-config test-step6 test-step7
 
 help:
@@ -33,6 +33,7 @@ help:
 	@echo "  make force-step7-fgap Re-run step7-fgap-init"
 	@echo "  make force-step8      Re-run step8-init"
 	@echo "  make force-step9      Re-run step9-init (archive setup)"
+	@echo "  make force-step10     Re-run step10-init (user onboarding mail setup)"
 	@echo "  make maintenance      Run custom command in keycloak-maintenance (MAINT_CMD='...')"
 	@echo "  make audit-export     Run audit export now (updates watermark)"
 	@echo "  make full-backup      Dump DB and copy .env/.local into ~/sso_backups/<timestamp>"
@@ -50,6 +51,7 @@ build-spis:
 	mvn -q -f custom-delegated-admin-guard-spi/pom.xml -DskipTests package
 	mvn -q -f custom-password-phrase-policy-spi/pom.xml -DskipTests package
 	mvn -q -f custom-failure-logs-event-listener-spi/pom.xml -DskipTests package
+	mvn -q -f custom-user-onboarding-email-spi/pom.xml -DskipTests package
 
 dev-reload-spi:
 	./scripts/dev_hot_reload_spi.sh
@@ -95,7 +97,7 @@ logs-runtime:
 	$(COMPOSE) logs --timestamps --tail=200 -f keycloak postgres
 
 logs-init:
-	$(COMPOSE) logs --timestamps --tail=200 -f step1-init step2-init step2-fgap-init step3-init step4-init step5-init step6-init step6-fgap-init step7-init step7-fgap-init step8-init step9-init
+	$(COMPOSE) logs --timestamps --tail=200 -f step1-init step2-init step2-fgap-init step3-init step4-init step5-init step6-init step6-fgap-init step7-init step7-fgap-init step8-init step9-init step10-init
 
 force-step1:
 	$(COMPOSE) run --rm -e STEP1_FORCE=true step1-init
@@ -126,6 +128,9 @@ force-step8:
 
 force-step9:
 	$(COMPOSE) run --rm -e STEP9_FORCE=true step9-init
+
+force-step10:
+	$(COMPOSE) run --rm -e STEP10_FORCE=true step10-init
 
 maintenance:
 	$(COMPOSE) run --rm --no-build keycloak-maintenance /bin/bash -lc "$${MAINT_CMD:?Set MAINT_CMD='...'}"

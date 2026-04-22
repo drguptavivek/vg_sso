@@ -9,6 +9,7 @@ services:
       - .env
       - .env.dev
     environment:
+      KC_LOG: console
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
     command: [ "start-dev", "--http-port=8080", "--hostname-strict=false", "--health-enabled=true", "--spi-theme-cache-themes=false", "--spi-theme-cache-templates=false", "--features=scripts" ]
@@ -48,5 +49,9 @@ services:
       - ./scripts:/opt/keycloak/scripts:ro
 
   step8-init:
+    volumes:
+      - ./scripts:/opt/keycloak/scripts:ro
+
+  step10-init:
     volumes:
       - ./scripts:/opt/keycloak/scripts:ro

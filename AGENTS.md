@@ -10,7 +10,7 @@ Use `docker compose` plus the helper scripts below instead of manually starting 
   - `keycloak`
   - `step1-init`
   - `step2-init`
-  - `step3-init` ... `step9-init`
+  - `step3-init` ... `step10-init`
   - `keycloak-maintenance` (routine maintenance runner)
 - `docker-compose.override.yml` is the local development overlay:
   - exposes `8080`, `9000`, and `5432`
@@ -111,7 +111,7 @@ make dev-reload-spi
 - Changing theme files
 - Changing Dockerfile itself
 
-**Note:** Running `--profile test run --rm step7-test` re-starts init containers (step1 -> step9)
+**Note:** Running `--profile test run --rm step7-test` re-starts init containers (step1 -> step10)
 as a dependency chain. This is by design and fast — each init container checks its marker file and
 exits immediately if already run. No re-configuration happens unless `STEP_FORCE=true` is set.
 
@@ -170,6 +170,9 @@ The compose workflow is intentionally split into one-shot init containers:
    - configures `auditor` role, 270-day event retention baseline, and failure log listener assignment
 11. `step9-init`
    - provisions audit archival/export directories and watermark state
+12. `step10-init`
+   - enables forgot-password recovery and registers the user onboarding email listener
+   - drives admin-created user onboarding by sending execute-actions email for email verification, password setup, TOTP enrollment, and recovery-code generation
 
 Each step writes a marker file into the shared Keycloak data volume and skips on later runs unless forced.
 
@@ -207,6 +210,7 @@ docker compose -f docker-compose.yml -f docker-compose.override.yml run --rm -e 
 docker compose -f docker-compose.yml -f docker-compose.override.yml run --rm -e STEP3_FORCE=true step3-init
 docker compose -f docker-compose.yml -f docker-compose.override.yml run --rm -e STEP8_FORCE=true step8-init
 docker compose -f docker-compose.yml -f docker-compose.override.yml run --rm -e STEP9_FORCE=true step9-init
+docker compose -f docker-compose.yml -f docker-compose.override.yml run --rm -e STEP10_FORCE=true step10-init
 ```
 
 Useful when iterating:
@@ -216,6 +220,7 @@ Useful when iterating:
 - use `STEP3_FORCE=true` after changing scopes or mapper automation
 - use `STEP8_FORCE=true` after changing auditor/event retention/listener automation
 - use `STEP9_FORCE=true` after changing archival setup automation
+- use `STEP10_FORCE=true` after changing onboarding email or forgot-password automation
 
 ## Maintenance Runner
 

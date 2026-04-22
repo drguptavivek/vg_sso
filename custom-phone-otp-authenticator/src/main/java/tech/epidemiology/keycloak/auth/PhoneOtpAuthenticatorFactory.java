@@ -68,6 +68,9 @@ public class PhoneOtpAuthenticatorFactory implements AuthenticatorFactory, Confi
     props.add(prop("otp.length", "OTP length", ProviderConfigProperty.STRING_TYPE, "6"));
     props.add(prop("otp.ttl.seconds", "OTP TTL seconds", ProviderConfigProperty.STRING_TYPE, "300"));
     props.add(prop("otp.max.attempts", "Max OTP verify attempts", ProviderConfigProperty.STRING_TYPE, "5"));
+    props.add(prop("otp.resend.max", "Max resend attempts before temporary block", ProviderConfigProperty.STRING_TYPE, "3"));
+    props.add(prop("otp.resend.interval.seconds", "Minimum seconds between resend requests", ProviderConfigProperty.STRING_TYPE, "30"));
+    props.add(prop("otp.resend.block.seconds", "Temporary block seconds after resend limit is exhausted", ProviderConfigProperty.STRING_TYPE, "900"));
     props.add(prop("otp.retry.max", "HTTP retry count per endpoint", ProviderConfigProperty.STRING_TYPE, "2"));
     props.add(prop("otp.retry.backoff.ms", "Retry backoff base ms", ProviderConfigProperty.STRING_TYPE, "500"));
     props.add(prop("otp.request.token.header", "Header key for generated OTP token", ProviderConfigProperty.STRING_TYPE, "X-OTP-Token"));

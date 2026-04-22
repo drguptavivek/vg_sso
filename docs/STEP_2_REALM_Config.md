@@ -24,7 +24,11 @@ REALM="${KC_NEW_REALM_NAME}"
 
 `scripts/step2_realm_config_docker.sh` now applies all of these automatically:
 - Realm security baseline (login, brute-force, password policy, token/session timeouts, events).
-- Required actions (`VERIFY_EMAIL`, `UPDATE_PASSWORD`).
+- Required actions including:
+  - `VERIFY_EMAIL`
+  - `UPDATE_PASSWORD`
+  - `CONFIGURE_TOTP`
+  - `CONFIGURE_RECOVERY_AUTHN_CODES`
 - Client hardening (disable direct grants + implicit flow for all clients except `admin-cli`).
 - User profile schema custom attributes (`phone_number`, `employment_type`, `employee_id`, `posts`, `designation`, `remarks`).
 - `user-manager` realm role + composite mappings (`view-users`, `query-users`, `query-groups`).
@@ -34,6 +38,10 @@ REALM="${KC_NEW_REALM_NAME}"
 Still manual:
 - Custom password phrase policy terms via Admin Console UI path:
   `Authentication -> Policies -> Password Policy -> Add policy -> Forbidden Terms`.
+
+Important:
+- Step 2 enables the required-action providers and default-action behavior.
+- Step 10 is what sends the onboarding execute-actions email to admin-created users at runtime.
 
 # VG realm direct login/account console landing
 http://localhost:8080/realms/$REALM/account

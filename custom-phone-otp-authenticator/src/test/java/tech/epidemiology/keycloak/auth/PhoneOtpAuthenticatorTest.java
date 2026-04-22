@@ -23,6 +23,7 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -69,8 +70,12 @@ class PhoneOtpAuthenticatorTest {
         lenient().when(context.form()).thenReturn(formsProvider);
         lenient().when(context.getHttpRequest()).thenReturn(httpRequest);
         lenient().when(formsProvider.setError(anyString())).thenReturn(formsProvider);
+        lenient().when(formsProvider.setSuccess(anyString())).thenReturn(formsProvider);
+        lenient().when(formsProvider.setAttribute(anyString(), any())).thenReturn(formsProvider);
         lenient().when(formsProvider.createForm(anyString())).thenReturn(mock(Response.class));
         lenient().when(formsProvider.createErrorPage(any())).thenReturn(mock(Response.class));
+        lenient().when(user.getUsername()).thenReturn("test.user");
+        lenient().when(user.getId()).thenReturn("user-id");
     }
 
     @Test
@@ -100,6 +105,7 @@ class PhoneOtpAuthenticatorTest {
         
         verify(context).challenge(any());
         verify(smsSender).sendWithRetry(any(), any(), any(), any(), any(), any(), anyInt(), anyInt(), any(), any());
+        verify(formsProvider).createForm("login-phone-otp.ftl");
     }
 
     @Test
@@ -113,5 +119,60 @@ class PhoneOtpAuthenticatorTest {
 
         authenticator.action(context);
         verify(context).failureChallenge(eq(AuthenticationFlowError.EXPIRED_CODE), any());
+    }
+
+    @Test
+    void testAction_ResendTooSoon() {
+        when(user.getFirstAttribute("phone_number")).thenReturn("+919876543210");
+        when(authSession.getAuthNote("phone_otp_last_sent_at")).thenReturn(String.valueOf(Instant.now().getEpochSecond()));
+        when(authSession.getAuthNote("phone_otp_resend_count")).thenReturn("0");
+        when(authSession.getAuthNote("phone_otp_resend_block_until")).thenReturn("0");
+
+        MultivaluedMap<String, String> formData = new MultivaluedHashMap<>();
+        formData.add("resend", "true");
+        when(httpRequest.getDecodedFormParameters()).thenReturn(formData);
+
+        authenticator.action(context);
+
+        verify(context).challenge(any());
+        verify(formsProvider).setSuccess("phoneOtpResendTooSoon");
+    }
+
+    @Test
+    void testAction_ResendBlockedAfterExhaustion() {
+        when(user.getFirstAttribute("phone_number")).thenReturn("+919876543210");
+        when(authSession.getAuthNote("phone_otp_last_sent_at")).thenReturn(String.valueOf(Instant.now().minusSeconds(60).getEpochSecond()));
+        when(authSession.getAuthNote("phone_otp_resend_count")).thenReturn("3");
+        when(authSession.getAuthNote("phone_otp_resend_block_until")).thenReturn("0");
+
+        MultivaluedMap<String, String> formData = new MultivaluedHashMap<>();
+        formData.add("resend", "true");
+        when(httpRequest.getDecodedFormParameters()).thenReturn(formData);
+
+        authenticator.action(context);
+
+        verify(authSession).setAuthNote(eq("phone_otp_resend_block_until"), anyString());
+        verify(formsProvider).setSuccess("phoneOtpResendBlocked");
+    }
+
+    @Test
+    void testAction_ResendSuccess() {
+        when(user.getFirstAttribute("phone_number")).thenReturn("+919876543210");
+        when(authSession.getAuthNote("phone_otp_last_sent_at")).thenReturn(String.valueOf(Instant.now().minusSeconds(60).getEpochSecond()));
+        when(authSession.getAuthNote("phone_otp_resend_count")).thenReturn("1");
+        when(authSession.getAuthNote("phone_otp_resend_block_until")).thenReturn("0");
+        when(smsSender.sendWithRetry(any(), any(), any(), any(), any(), any(), anyInt(), anyInt(), any(), any()))
+            .thenReturn(true);
+
+        MultivaluedMap<String, String> formData = new MultivaluedHashMap<>();
+        formData.add("resend", "true");
+        when(httpRequest.getDecodedFormParameters()).thenReturn(formData);
+
+        authenticator.action(context);
+
+        verify(authSession).setAuthNote("phone_otp_resend_count", "2");
+        verify(context).challenge(any());
+        verify(formsProvider).setSuccess("phoneOtpResent");
+        verify(formsProvider, atLeastOnce()).createForm("login-phone-otp.ftl");
     }
 }

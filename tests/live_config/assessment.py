@@ -367,6 +367,7 @@ def build_context() -> dict:
         "realm_client": realm_client,
         "master_client": master_client,
         "realm_data": realm_client.get(f"/admin/realms/{realm}"),
+        "events_config": realm_client.get(f"/admin/realms/{realm}/events/config"),
         "required_actions": realm_client.get(f"/admin/realms/{realm}/authentication/required-actions"),
         "user_profile": realm_client.get(f"/admin/realms/{realm}/users/profile"),
         "clients": realm_client.get(f"/admin/realms/{realm}/clients", {"max": 500}),
@@ -412,6 +413,7 @@ def _result(control_id: str, category: str, severity: str, status: str, title: s
 def evaluate_controls(context: dict) -> list[ControlResult]:
     realm_data = context["realm_data"]
     required_actions = {item["alias"]: item for item in context["required_actions"]}
+    events_config = context["events_config"]
     clients = context["clients"]
     client_scopes = {scope["name"]: scope["id"] for scope in context["client_scopes"]}
     default_scope_names = {scope["name"] for scope in context["default_scopes"]}
@@ -1015,8 +1017,33 @@ def evaluate_controls(context: dict) -> list[ControlResult]:
                 else "FAIL",
                 "Proxy emits security headers on HTTPS responses",
                 json.dumps(header_names, sort_keys=True),
-            )
         )
+    )
+
+    reset_password_status = "PASS" if realm_data.get("resetPasswordAllowed") else "FAIL"
+    results.append(
+        _result(
+            "reset-password-flow",
+            "integration",
+            "high",
+            reset_password_status,
+            "Forgot-password flow enabled",
+            f"resetPasswordAllowed={realm_data.get('resetPasswordAllowed')}",
+        )
+    )
+
+    events_listeners = set(events_config.get("eventsListeners", []))
+    onboarding_listener_status = "PASS" if "user-onboarding-email" in events_listeners else "FAIL"
+    results.append(
+        _result(
+            "user-onboarding-listener",
+            "integration",
+            "high",
+            onboarding_listener_status,
+            "User onboarding event listener registered",
+            f"eventsListeners={sorted(events_listeners)}",
+        )
+    )
 
     return results
 

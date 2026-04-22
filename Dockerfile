@@ -29,6 +29,7 @@ COPY custom-account-expiry-spi/target/*.jar /opt/keycloak/providers/
 COPY custom-delegated-admin-guard-spi/target/*.jar /opt/keycloak/providers/
 COPY custom-password-phrase-policy-spi/target/*.jar /opt/keycloak/providers/
 COPY custom-failure-logs-event-listener-spi/target/*.jar /opt/keycloak/providers/
+COPY custom-user-onboarding-email-spi/target/*.jar /opt/keycloak/providers/
 
 # Theme changes are frequent; keep this last before kc build for better cache reuse.
 COPY theme /opt/keycloak/themes
@@ -43,6 +44,7 @@ COPY scripts/step6_client_admin_setup.sh /opt/keycloak/scripts/step6_client_admi
 COPY scripts/step7_approles_bootstrap.sh /opt/keycloak/scripts/step7_approles_bootstrap.sh
 COPY scripts/step8_auditor_setup.sh /opt/keycloak/scripts/step8_auditor_setup.sh
 COPY scripts/step9_audit_archival_setup.sh /opt/keycloak/scripts/step9_audit_archival_setup.sh
+COPY scripts/step10_user_onboarding_setup.sh /opt/keycloak/scripts/step10_user_onboarding_setup.sh
 
 RUN find /opt/keycloak/themes -type d -exec chmod 755 {} + \
     && find /opt/keycloak/themes -type f -exec chmod 644 {} + \
