@@ -52,6 +52,7 @@ build-spis:
 	mvn -q -f custom-password-phrase-policy-spi/pom.xml -DskipTests package
 	mvn -q -f custom-failure-logs-event-listener-spi/pom.xml -DskipTests package
 	mvn -q -f custom-user-onboarding-email-spi/pom.xml -DskipTests package
+	mvn -q -f custom-async-email-spi/pom.xml -DskipTests package
 
 dev-reload-spi:
 	./scripts/dev_hot_reload_spi.sh

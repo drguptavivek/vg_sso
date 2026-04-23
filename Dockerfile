@@ -1,4 +1,4 @@
-ARG KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:26.5.6
+ARG KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:26.6.1
 
 FROM fedora:35 AS build-tools
 RUN dnf install -y jq curl findutils \
@@ -26,6 +26,7 @@ RUN cp /usr/lib64/jq /usr/local/bin/jq && cp /usr/lib64/curl /usr/local/bin/curl
 COPY custom-group-attr-mapper/target/*.jar /opt/keycloak/providers/
 COPY custom-phone-otp-authenticator/target/*.jar /opt/keycloak/providers/
 COPY custom-account-expiry-spi/target/*.jar /opt/keycloak/providers/
+COPY custom-async-email-spi/target/*.jar /opt/keycloak/providers/
 COPY custom-delegated-admin-guard-spi/target/*.jar /opt/keycloak/providers/
 COPY custom-password-phrase-policy-spi/target/*.jar /opt/keycloak/providers/
 COPY custom-failure-logs-event-listener-spi/target/*.jar /opt/keycloak/providers/
@@ -56,7 +57,7 @@ RUN set -eu; \
     for theme_dir in /opt/keycloak/themes/admin-vg-custom/admin /opt/keycloak/themes/vg/admin /opt/keycloak/themes/vg-master/admin; do \
       props="${theme_dir}/theme.properties"; \
       [ -f "${props}" ] || continue; \
-      for asset in phone-otp-menu.v2.js account-expiry-menu.v2.js; do \
+      for asset in async-email-menu.v2.js phone-otp-menu.v2.js account-expiry-menu.v2.js; do \
         src="${theme_dir}/resources/js/${asset}"; \
         [ -f "${src}" ] || continue; \
         dst="${theme_dir}/resources/js/${asset%.js}-${version}.js"; \

@@ -17,6 +17,7 @@ DEFAULT_MODULES=(
   "custom-password-phrase-policy-spi"
   "custom-failure-logs-event-listener-spi"
   "custom-user-onboarding-email-spi"
+  "custom-async-email-spi"
 )
 
 usage() {
