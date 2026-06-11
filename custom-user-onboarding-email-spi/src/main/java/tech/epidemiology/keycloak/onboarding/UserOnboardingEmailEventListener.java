@@ -1,5 +1,6 @@
 package tech.epidemiology.keycloak.onboarding;
 
+import jakarta.ws.rs.core.UriInfo;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
@@ -58,6 +59,16 @@ final class UserOnboardingEmailEventListener implements EventListenerProvider {
 
     @Override
     public void onEvent(AdminEvent event, boolean includeRepresentation) {
+        if (event != null && event.getResourcePath() != null && event.getResourcePath().startsWith("users/")) {
+            LOG.infof(
+                "USER_ONBOARDING: admin event observed realmId=%s operation=%s resourceType=%s path=%s includeRepresentation=%s",
+                event.getRealmId(),
+                event.getOperationType(),
+                event.getResourceType(),
+                event.getResourcePath(),
+                includeRepresentation
+            );
+        }
         if (!UserOnboardingEmailPolicy.isUserCreateEvent(event)) {
             return;
         }
@@ -79,7 +90,27 @@ final class UserOnboardingEmailEventListener implements EventListenerProvider {
         }
 
         UserModel user = session.users().getUserById(realm, userId);
+        LOG.infof(
+            "USER_ONBOARDING: user create event received realm=%s userId=%s path=%s txActive=%s",
+            realm.getName(),
+            userId,
+            event.getResourcePath(),
+            session.getTransactionManager().isActive()
+        );
         if (!UserOnboardingEmailPolicy.shouldSend(realm, user, skipUsernames, enabledRealms)) {
+            LOG.infof(
+                "USER_ONBOARDING: shouldSend=false realm=%s userId=%s userPresent=%s username=%s enabled=%s emailPresent=%s emailVerified=%s sentAtPresent=%s skipUser=%s enabledRealms=%s",
+                realm.getName(),
+                userId,
+                user != null,
+                user == null ? "" : user.getUsername(),
+                user != null && user.isEnabled(),
+                user != null && trimToNull(user.getEmail()) != null,
+                user != null && user.isEmailVerified(),
+                user != null && trimToNull(user.getFirstAttribute(UserOnboardingEmailPolicy.SENT_AT_ATTRIBUTE)) != null,
+                user != null && skipUsernames.contains(user.getUsername()),
+                enabledRealms
+            );
             return;
         }
         if (!UserOnboardingEmailPolicy.hasUsableSmtpConfig(realm)) {
@@ -87,7 +118,14 @@ final class UserOnboardingEmailEventListener implements EventListenerProvider {
             return;
         }
 
-        enqueueAsyncSend(realm.getId(), realm.getName(), user.getId(), user.getUsername(), user.getEmail());
+        LOG.infof("USER_ONBOARDING: queueing onboarding email user=%s realm=%s txActive=%s", user.getUsername(), realm.getName(), session.getTransactionManager().isActive());
+        try {
+            String link = buildExecuteActionsLink(session, realm, user, UserOnboardingEmailPolicy.REQUIRED_ACTIONS);
+            sendExecuteActionsEmail(session, realm, user, link, UserOnboardingEmailPolicy.REQUIRED_ACTIONS);
+            LOG.infof("USER_ONBOARDING: onboarding email queued user=%s realm=%s", user.getUsername(), realm.getName());
+        } catch (Exception e) {
+            LOG.warnf(e, "USER_ONBOARDING: failed to queue onboarding email user=%s realm=%s", user.getUsername(), realm.getName());
+        }
     }
 
     @Override
@@ -205,7 +243,11 @@ final class UserOnboardingEmailEventListener implements EventListenerProvider {
             null,
             null
         );
-        String serialized = token.serialize(currentSession, realm, null);
+        UriInfo uriInfo = currentSession.getContext().getUri();
+        if (uriInfo == null) {
+            throw new IllegalStateException("Missing request UriInfo for execute-actions token serialization");
+        }
+        String serialized = token.serialize(currentSession, realm, uriInfo);
         URI uri = URI.create(baseUrl);
         String basePath = normalizePath(uri.getPath());
         String finalPath = basePath + "/realms/" + realm.getName() + "/login-actions/action-token";

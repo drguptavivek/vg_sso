@@ -5,6 +5,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.jboss.logging.Logger;
 import org.keycloak.Config;
 import org.keycloak.events.EventListenerProvider;
 import org.keycloak.events.EventListenerProviderFactory;
@@ -12,6 +13,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 
 public final class UserOnboardingEmailEventListenerFactory implements EventListenerProviderFactory {
+    private static final Logger LOG = Logger.getLogger(UserOnboardingEmailEventListenerFactory.class);
     public static final String PROVIDER_ID = "user-onboarding-email";
 
     private volatile int tokenLifespanSeconds = UserOnboardingEmailPolicy.DEFAULT_TOKEN_LIFESPAN_SECONDS;
@@ -23,6 +25,7 @@ public final class UserOnboardingEmailEventListenerFactory implements EventListe
 
     @Override
     public EventListenerProvider create(KeycloakSession session) {
+        LOG.infof("USER_ONBOARDING: creating event listener provider sessionFactoryReady=%s executorReady=%s publicBaseUrl=%s enabledRealms=%s", sessionFactory != null, executor != null, publicBaseUrl, enabledRealms);
         return new UserOnboardingEmailEventListener(
             session,
             sessionFactory,
@@ -45,6 +48,7 @@ public final class UserOnboardingEmailEventListenerFactory implements EventListe
     @Override
     public void postInit(KeycloakSessionFactory factory) {
         this.sessionFactory = factory;
+        LOG.info("USER_ONBOARDING: factory postInit complete");
         this.executor = Executors.newSingleThreadExecutor(r -> {
             Thread thread = new Thread(r, "user-onboarding-email");
             thread.setDaemon(true);

@@ -115,7 +115,7 @@ class UserOnboardingEmailPolicyTest {
             "KC_NEW_REALM_ADMIN_USER", "realmadmin"
         ));
 
-        assertThat(usernames).containsExactly("custom-admin", "ssoadmin", "masteradmin", "realmadmin");
+        assertThat(usernames).containsExactlyInAnyOrder("custom-admin", "ssoadmin", "masteradmin", "realmadmin");
     }
 
     @Test

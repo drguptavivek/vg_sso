@@ -1,0 +1,3 @@
+[submodule "keycloak_sources"]
+	path = keycloak_sources
+	url = https://github.com/keycloak/keycloak.git

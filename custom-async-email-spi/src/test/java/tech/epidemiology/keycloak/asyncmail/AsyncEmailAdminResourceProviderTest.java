@@ -1,10 +1,15 @@
 package tech.epidemiology.keycloak.asyncmail;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import org.junit.jupiter.api.Test;
+import org.keycloak.models.ClientModel;
+import org.keycloak.models.RealmModel;
 
 class AsyncEmailAdminResourceProviderTest {
 
@@ -49,6 +54,27 @@ class AsyncEmailAdminResourceProviderTest {
     assertThat(dto.toMap()).containsEntry("username", "alice");
     assertThat(dto.toMap()).doesNotContainKey("payload_json");
     assertThat(dto.toMap().get("id")).isEqualTo("row-id");
+  }
+
+  @Test
+  void resolvesAdminRolesClientForMasterAndRealmDashboards() {
+    RealmModel masterRealm = mock(RealmModel.class);
+    ClientModel masterRealmClient = mock(ClientModel.class);
+    when(masterRealm.getName()).thenReturn("master");
+    when(masterRealm.getClientByClientId("master-realm")).thenReturn(masterRealmClient);
+
+    assertThat(AsyncEmailAdminResourceProvider.adminRolesClientId(masterRealm)).isEqualTo("master-realm");
+    assertThat(AsyncEmailAdminResourceProvider.resolveAdminRolesClient(masterRealm)).isSameAs(masterRealmClient);
+    verify(masterRealm).getClientByClientId("master-realm");
+
+    RealmModel tenantRealm = mock(RealmModel.class);
+    ClientModel realmManagementClient = mock(ClientModel.class);
+    when(tenantRealm.getName()).thenReturn("aiims-new-delhi");
+    when(tenantRealm.getClientByClientId("realm-management")).thenReturn(realmManagementClient);
+
+    assertThat(AsyncEmailAdminResourceProvider.adminRolesClientId(tenantRealm)).isEqualTo("realm-management");
+    assertThat(AsyncEmailAdminResourceProvider.resolveAdminRolesClient(tenantRealm)).isSameAs(realmManagementClient);
+    verify(tenantRealm).getClientByClientId("realm-management");
   }
 
   @Test

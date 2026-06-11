@@ -67,7 +67,7 @@ If `keycloak-current/` is not the intended target in your checkout, point the sy
 
 ## Keycloak Version Notes
 
-- The image currently builds from Keycloak `26.5.4`.
+- The image currently builds from Keycloak `26.6.3`.
 - Keycloak 26.x `bootstrap-admin` does not accept `--password`; use `--password:env`.
 - On this setup, `kcadm.sh set-password` treats `--temporary` as a flag.
   - Permanent password: omit `--temporary`.
@@ -249,34 +249,57 @@ docker compose -f docker-compose.yml -f docker-compose.override.yml down -v
 
 ## kcadm Login From Host
 
-Use the local wrapper script when you need a host-side token cache:
+Use `make kcadm-login` to create a host-side `kcadm` token cache using
+`KC_MASTER_ADMIN_USER` and `KC_MASTER_ADMIN_PASSWORD` from `.env`.
+The target parses `.env` with `grep`/`cut`; do not source `.env` because some
+values may not be shell-safe.
 
 ```bash
-ADMIN_PASSWORD='your-admin-password' ./scripts/keycloak_login_admin.sh
+make kcadm-login
 ```
 
 Defaults:
 
 - `KEYCLOAK_URL=http://localhost:8080`
 - `ADMIN_REALM=master`
-- `ADMIN_USER=admin`
-- `KCADM_CONFIG=.kcadm.config`
+- `CONTAINER_NAME=vg-keycloak`
+- `KCADM_CONFIG=/tmp/kcadm-master-admin.config`
 
-Direct `kcadm` example:
+The generated config is on the host and is intended for host-side `./kcadm.sh`
+commands:
 
 ```bash
-./kcadm.sh config credentials \
-  --server http://localhost:8080 \
-  --realm master \
-  --user "$KC_BOOTSTRAP_ADMIN_USERNAME" \
-  --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" \
-  --config .kcadm.config
+./kcadm.sh get users \
+  -r aiims-new-delhi \
+  -q username=vgcf \
+  --config /tmp/kcadm-master-admin.config
+```
+
+Send an onboarding execute-actions email from host:
+
+```bash
+printf '%s' '["VERIFY_EMAIL","UPDATE_PASSWORD","CONFIGURE_TOTP","CONFIGURE_RECOVERY_AUTHN_CODES"]' > /tmp/onboarding-actions.json
+
+./kcadm.sh update users/<USER_ID>/execute-actions-email \
+  -r aiims-new-delhi \
+  --config /tmp/kcadm-master-admin.config \
+  -q lifespan=43200 \
+  -f /tmp/onboarding-actions.json \
+  -n
+```
+
+Overrides:
+
+```bash
+KCADM_CONFIG=/tmp/my-kcadm.config make kcadm-login
+KEYCLOAK_URL=https://sso1.aiims.edu.in make kcadm-login
+ADMIN_USER=... ADMIN_PASSWORD=... make kcadm-login
 ```
 
 Security:
 
-- `.kcadm.config` contains tokens/secrets and must stay local.
-- It is ignored by git via `.gitignore`.
+- `KCADM_CONFIG` contains tokens/secrets and must stay local.
+- Prefer `/tmp/kcadm-master-admin.config` for temporary host-side sessions.
 
 ## Live Config Validation
 

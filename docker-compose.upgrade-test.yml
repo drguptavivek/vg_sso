@@ -1,0 +1,58 @@
+services:
+  upgrade-postgres:
+    image: postgres:16
+    container_name: vg-postgres-upgrade-test
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${KC_DB_NAME:-keycloak}
+      POSTGRES_USER: ${KC_DB_USERNAME:-keycloak}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD:-change_me}
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_upgrade_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${KC_DB_USERNAME:-keycloak} -d ${KC_DB_NAME:-keycloak}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  upgrade-keycloak:
+    image: ${UPGRADE_TEST_IMAGE:-vg_sso-keycloak-upgrade-test:26.6.3}
+    container_name: vg-keycloak-upgrade-test
+    restart: "no"
+    depends_on:
+      upgrade-postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://upgrade-postgres:5432/${KC_DB_NAME:-keycloak}
+      KC_DB_USERNAME: ${KC_DB_USERNAME:-keycloak}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:-change_me}
+      KC_FEATURES: ${KC_FEATURES:-admin-fine-grained-authz:v2,passkeys:v1,recovery-codes:v1,impersonation:v1}
+      KC_HOSTNAME: ""
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_HOST: 0.0.0.0
+      KC_HTTP_PORT: 8080
+      KC_HTTP_MANAGEMENT_HOST: 0.0.0.0
+      KC_HTTP_MANAGEMENT_PORT: 9000
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-ChangeMe123!}
+      KC_FAILURE_LOG_FILE: ${KC_FAILURE_LOG_FILE:-/var/log/keycloak/failure-auth.log}
+      KC_LOG: console
+    command: [ "start", "--optimized", "--hostname-strict=false", "--health-enabled=true" ]
+    ports:
+      - "18080:8080"
+      - "19000:9000"
+    volumes:
+      - keycloak_upgrade_test_data:/opt/keycloak/data
+      - ./logs/keycloak-upgrade-test:/var/log/keycloak
+
+volumes:
+  postgres_upgrade_test_data:
+  keycloak_upgrade_test_data:

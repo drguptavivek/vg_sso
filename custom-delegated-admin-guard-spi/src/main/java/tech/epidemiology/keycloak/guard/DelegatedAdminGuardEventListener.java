@@ -27,9 +27,10 @@ import java.util.regex.Pattern;
  *  1. CLIENT DELETE — blocked entirely (DB rollback). HTTP 403 handled by filter.
  *  2. CLIENT_SCOPE mutations — blocked entirely (DB rollback). HTTP 403 by filter.
  *
- * Automation triggered (for client-manager users):
- *  3. CLIENT CREATE — auto-provisions AppRoles/{clientId} group, assigns delegated-client-admin-base
- *     role to creator, and adds creator as direct group member (first PCA).
+ * Automation triggered:
+ *  3. CLIENT CREATE — auto-provisions AppRoles/{clientId} group for any authenticated
+ *     admin actor. For client-manager users, also assigns delegated-client-admin-base
+ *     role to creator and adds creator as direct group member (first PCA).
  *
  * How it works:
  *  onAdminEvent() is called within the Keycloak transaction that executed the
@@ -101,17 +102,18 @@ public class DelegatedAdminGuardEventListener implements EventListenerProvider {
             return;
         }
 
-        // Only apply client/client-scope restrictions to client-manager role holders
-        if (!hasClientManagerRole(realm, actor)) {
-            return;
-        }
-
         ResourceType resourceType = event.getResourceType();
         OperationType opType = event.getOperationType();
+        boolean isClientManager = hasClientManagerRole(realm, actor);
 
         // ── Rule 0: CLIENT CREATE — provision AppRoles/{clientId} group ──
         if (resourceType == ResourceType.CLIENT && opType == OperationType.CREATE) {
-            provisionAppRolesGroup(realm, actor, event.getResourcePath());
+            provisionAppRolesGroup(realm, actor, event.getResourcePath(), isClientManager);
+            return;
+        }
+
+        // Only apply client/client-scope restrictions to client-manager role holders.
+        if (!isClientManager) {
             return;
         }
 
@@ -232,13 +234,17 @@ public class DelegatedAdminGuardEventListener implements EventListenerProvider {
      *  1. Resolve clientId from the resource path (clients/{uuid})
      *  2. Find AppRoles parent group (must already exist — created by step7-init)
      *  3. Create AppRoles/{clientId} subgroup if not already present
-     *  4. Add the actor (client-manager who created the client) as direct member
-     *  5. Assign delegated-client-admin-base realm role to the actor
+     *  4. For client-manager actors only, add the actor as direct member
+     *  5. For client-manager actors only, assign delegated-client-admin-base realm role
      *
      * Called within the same Keycloak transaction as the CLIENT_CREATE event.
      * Failures are logged but do not roll back the client creation.
      */
-    private void provisionAppRolesGroup(RealmModel realm, UserModel actor, String resourcePath) {
+    private void provisionAppRolesGroup(
+            RealmModel realm,
+            UserModel actor,
+            String resourcePath,
+            boolean assignCreatorAsPca) {
         try {
             // Extract UUID from "clients/{uuid}"
             if (resourcePath == null || !resourcePath.startsWith("clients/")) {
@@ -271,25 +277,27 @@ public class DelegatedAdminGuardEventListener implements EventListenerProvider {
                     APPROLES_GROUP_NAME, clientId);
             }
 
-            // Add actor as direct member of the app group (makes them PCA)
-            if (!actor.isMemberOf(appGroup)) {
-                actor.joinGroup(appGroup);
-                LOG.infof("DELEGATED_ADMIN_GUARD: Added user '%s' to %s/%s",
-                    actor.getUsername(), APPROLES_GROUP_NAME, clientId);
+            if (assignCreatorAsPca) {
+                // Add actor as direct member of the app group (makes them PCA)
+                if (!actor.isMemberOf(appGroup)) {
+                    actor.joinGroup(appGroup);
+                    LOG.infof("DELEGATED_ADMIN_GUARD: Added user '%s' to %s/%s",
+                        actor.getUsername(), APPROLES_GROUP_NAME, clientId);
+                }
+
+                // Assign delegated-client-admin-base realm role to actor (grants admin console composites)
+                RoleModel pcaBaseRole = realm.getRole(PCA_BASE_ROLE_NAME);
+                if (pcaBaseRole != null && !actor.hasRole(pcaBaseRole)) {
+                    actor.grantRole(pcaBaseRole);
+                    LOG.infof("DELEGATED_ADMIN_GUARD: Granted '%s' role to user '%s'",
+                        PCA_BASE_ROLE_NAME, actor.getUsername());
+                } else if (pcaBaseRole == null) {
+                    LOG.warnf("DELEGATED_ADMIN_GUARD: '%s' role not found — run step7-init first", PCA_BASE_ROLE_NAME);
+                }
             }
 
-            // Assign delegated-client-admin-base realm role to actor (grants admin console composites)
-            RoleModel pcaBaseRole = realm.getRole(PCA_BASE_ROLE_NAME);
-            if (pcaBaseRole != null && !actor.hasRole(pcaBaseRole)) {
-                actor.grantRole(pcaBaseRole);
-                LOG.infof("DELEGATED_ADMIN_GUARD: Granted '%s' role to user '%s'",
-                    PCA_BASE_ROLE_NAME, actor.getUsername());
-            } else if (pcaBaseRole == null) {
-                LOG.warnf("DELEGATED_ADMIN_GUARD: '%s' role not found — run step7-init first", PCA_BASE_ROLE_NAME);
-            }
-
-            LOG.infof("DELEGATED_ADMIN_GUARD: ✅ PCA provisioned — user='%s' client='%s' group='%s/%s'",
-                actor.getUsername(), clientId, APPROLES_GROUP_NAME, clientId);
+            LOG.infof("DELEGATED_ADMIN_GUARD: AppRoles group provisioned — user='%s' client='%s' group='%s/%s' assignCreatorAsPca=%s",
+                actor.getUsername(), clientId, APPROLES_GROUP_NAME, clientId, assignCreatorAsPca);
 
         } catch (Exception e) {
             // Log but do not roll back — client creation must not be blocked by PCA setup failure

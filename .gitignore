@@ -60,3 +60,9 @@ tests/spi_coverage/
 .beads/dolt-monitor.pid
 .beads/dolt-server.activity
 .beads/dolt-server.port
+README.md
+README.md
+README.md
+
+# Track module-level SPI documentation
+!custom-delegated-admin-guard-spi/README.md

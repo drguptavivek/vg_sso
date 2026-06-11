@@ -647,18 +647,29 @@ public class AsyncEmailAdminResourceProvider implements RealmResourceProvider {
     }
 
     UserModel user = authResult.getUser();
-    ClientModel realmManagement = realm.getClientByClientId("realm-management");
-    if (realmManagement == null) {
-      return AuthContext.fail(Response.Status.FORBIDDEN, "realm-management client is missing");
+    ClientModel adminRolesClient = resolveAdminRolesClient(realm);
+    if (adminRolesClient == null) {
+      return AuthContext.fail(Response.Status.FORBIDDEN, adminRolesClientId(realm) + " client is missing");
     }
 
     for (String roleName : roleNames) {
-      RoleModel role = realmManagement.getRole(roleName);
+      RoleModel role = adminRolesClient.getRole(roleName);
       if (role != null && user.hasRole(role)) {
         return AuthContext.ok(realm, user);
       }
     }
-    return AuthContext.fail(Response.Status.FORBIDDEN, "Required realm-management role is missing");
+    return AuthContext.fail(Response.Status.FORBIDDEN, "Required " + adminRolesClient.getClientId() + " role is missing");
+  }
+
+  static String adminRolesClientId(RealmModel realm) {
+    return realm != null && "master".equals(realm.getName()) ? "master-realm" : "realm-management";
+  }
+
+  static ClientModel resolveAdminRolesClient(RealmModel realm) {
+    if (realm == null) {
+      return null;
+    }
+    return realm.getClientByClientId(adminRolesClientId(realm));
   }
 
   public static final class RetryRequest {

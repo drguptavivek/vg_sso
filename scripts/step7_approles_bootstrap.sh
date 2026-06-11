@@ -141,7 +141,7 @@ kcadm get-roles -r "$REALM_NAME" --rname "$PCA_BASE_ROLE_NAME" --effective --ccl
 #
 # If you do NOT want role-subgroup members (end users) to have admin console access,
 # do NOT map delegated-client-admin-base to AppRoles here. Instead, the event listener assigns delegated-client-admin-base
-# directly to the PCA creator (see DelegatedAdminGuardEventListener).
+# directly only when a delegated client-manager creates the client (see DelegatedAdminGuardEventListener).
 # Mapping is skipped here for that reason. Role assignment is done per-PCA by the
 # event listener and realm admin.
 echo "STEP7: Skipping group role mapping for delegated-client-admin-base (assigned per-PCA by event listener)."
@@ -196,6 +196,7 @@ echo "STEP7:    '$APPROLES_GROUP_NAME' group id: $APPROLES_GROUP_ID"
 echo "STEP7:    '$PCA_BASE_ROLE_NAME' role created with composites:"
 echo "STEP7:      view-clients, query-clients, manage-clients, view-users, query-users"
 echo "STEP7:    On CLIENT_CREATE: event listener auto-creates AppRoles/{clientId}"
-echo "STEP7:      and assigns delegated-client-admin-base to the creator."
+echo "STEP7:      for client-manager and realm-admin-created clients."
+echo "STEP7:      client-manager creators are also assigned delegated-client-admin-base."
 echo "STEP7: ═══════════════════════════════════════════════════"
 echo "STEP7: Marker created at $STEP7_MARKER_FILE"

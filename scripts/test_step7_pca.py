@@ -5,6 +5,7 @@ Test: Step 7 — Per-Client Administration (PCA)
 Verifies the Per-Client Admin (PCA) system works end-to-end:
 
   ✅ test_01: client-manager creates test-app-alpha → AppRoles/test-app-alpha group auto-created
+  ✅ test_01b: realm-admin creates test-app-beta → AppRoles/test-app-beta group auto-created
   ✅ test_02: Creator is direct member of AppRoles/test-app-alpha (is PCA)
   ✅ test_03: PCA can view client list
   ✅ test_04: PCA can edit their own client (test-app-alpha settings)
@@ -233,6 +234,7 @@ class TestStep7PCA(unittest.TestCase):
 
         # Class-level state for shared test values
         cls.app_group_id = None       # AppRoles/{alpha_client_id} group UUID
+        cls.beta_app_group_id = None  # AppRoles/{beta_client_id} group UUID
         cls.subgroup_id = None        # AppRoles/{alpha_client_id}/manager subgroup UUID
         cls.subgroup_name = f"manager-{uuid.uuid4().hex[:4]}"
 
@@ -316,13 +318,17 @@ class TestStep7PCA(unittest.TestCase):
                 )
                 print(f"Deleted user: {uname}")
 
-        # Delete AppRoles/{alpha_client_id} group if it exists
-        if getattr(cls, 'app_group_id', None):
-            cls.session.delete(
-                f"{cls.url}/admin/realms/{cls.realm}/groups/{cls.app_group_id}",
-                headers=cls.admin_headers
-            )
-            print(f"Deleted app group for {cls.alpha_client_id}")
+        # Delete AppRoles/{clientId} groups if they exist
+        for client_id, group_id in [
+            (getattr(cls, 'alpha_client_id', None), getattr(cls, 'app_group_id', None)),
+            (getattr(cls, 'beta_client_id', None), getattr(cls, 'beta_app_group_id', None)),
+        ]:
+            if group_id:
+                cls.session.delete(
+                    f"{cls.url}/admin/realms/{cls.realm}/groups/{group_id}",
+                    headers=cls.admin_headers
+                )
+                print(f"Deleted app group for {client_id}")
 
     # ─────────────────────── TESTS ─────────────────────────────────────── #
 
@@ -348,6 +354,27 @@ class TestStep7PCA(unittest.TestCase):
         )
         self.__class__.app_group_id = app_group['id']
         print(f"\n✅ test_01: AppRoles/{self.alpha_client_id} auto-created (id={app_group['id']})")
+
+    def test_01b_realm_admin_created_client_gets_approles_subgroup(self):
+        """✅ After realm-admin creates test-app-beta, AppRoles/{clientId} group exists."""
+        approles_id = self._get_approles_group_id()
+        self.assertIsNotNone(approles_id, f"'{APPROLES_GROUP_NAME}' parent group must exist (run step7-init)")
+
+        res = self.session.get(
+            f"{self.url}/admin/realms/{self.realm}/groups/{approles_id}/children",
+            headers=self.admin_headers
+        )
+        res.raise_for_status()
+        subgroups = res.json()
+        beta_group = next((g for g in subgroups if g['name'] == self.beta_client_id), None)
+
+        self.assertIsNotNone(
+            beta_group,
+            f"Event listener must auto-create AppRoles/{self.beta_client_id} when realm-admin creates a client. "
+            f"Found subgroups: {[g['name'] for g in subgroups]}"
+        )
+        self.__class__.beta_app_group_id = beta_group['id']
+        print(f"\n✅ test_01b: AppRoles/{self.beta_client_id} auto-created by realm-admin client create (id={beta_group['id']})")
 
     def test_02_creator_is_pca_member(self):
         """✅ Creator (client-manager user) is direct member of AppRoles/{clientId}."""
