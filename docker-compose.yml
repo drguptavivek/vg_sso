@@ -307,6 +307,51 @@ services:
       - keycloak_data:/opt/keycloak/data
     entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step10_user_onboarding_setup.sh" ]
 
+  step11-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vg-step11-init
+    restart: "no"
+    depends_on:
+      step10-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      STEP11_FORCE: ${STEP11_FORCE:-false}
+      ADMIN_CONSOLE_CLIENT_ID: ${ADMIN_CONSOLE_CLIENT_ID:-hr-client-admin-console}
+      ADMIN_CONSOLE_CLIENT_SECRET: ${ADMIN_CONSOLE_CLIENT_SECRET:-}
+      ADMIN_CONSOLE_APP_URL: ${ADMIN_CONSOLE_APP_URL:-http://localhost:3100}
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step11_admin_console_client_setup.sh" ]
+
+  admin-console:
+    build:
+      context: ./admin-console
+      dockerfile: Dockerfile
+    container_name: vg-admin-console
+    restart: unless-stopped
+    depends_on:
+      step11-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      ADMIN_CONSOLE_KEYCLOAK_REALM: ${KC_NEW_REALM_NAME:-org-new-delhi}
+      ADMIN_CONSOLE_CLIENT_ID: ${ADMIN_CONSOLE_CLIENT_ID:-hr-client-admin-console}
+      ADMIN_CONSOLE_CLIENT_SECRET: ${ADMIN_CONSOLE_CLIENT_SECRET:-}
+      ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL: ${ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL:-http://localhost:8080}
+      ADMIN_CONSOLE_KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      NEXTAUTH_SECRET: ${ADMIN_CONSOLE_NEXTAUTH_SECRET:-}
+      NEXTAUTH_URL: ${ADMIN_CONSOLE_APP_URL:-http://localhost:3100}
+      ADMIN_CONSOLE_USER_MANAGER_ROLE: user-manager
+      ADMIN_CONSOLE_DELEGATED_CLIENT_ADMIN_ROLE: delegated-client-admin-base
+      ADMIN_CONSOLE_APP_ROLES_GROUP_NAME: AppRoles
+    ports:
+      - "${ADMIN_CONSOLE_PORT:-3100}:3100"
+
   keycloak-maintenance:
     build:
       context: .

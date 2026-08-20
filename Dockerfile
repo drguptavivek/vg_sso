@@ -46,6 +46,7 @@ COPY scripts/step7_approles_bootstrap.sh /opt/keycloak/scripts/step7_approles_bo
 COPY scripts/step8_auditor_setup.sh /opt/keycloak/scripts/step8_auditor_setup.sh
 COPY scripts/step9_audit_archival_setup.sh /opt/keycloak/scripts/step9_audit_archival_setup.sh
 COPY scripts/step10_user_onboarding_setup.sh /opt/keycloak/scripts/step10_user_onboarding_setup.sh
+COPY scripts/step11_admin_console_client_setup.sh /opt/keycloak/scripts/step11_admin_console_client_setup.sh
 
 RUN find /opt/keycloak/themes -type d -exec chmod 755 {} + \
     && find /opt/keycloak/themes -type f -exec chmod 644 {} + \

@@ -156,3 +156,7 @@ Both are idempotent and safe to re-run.
 | `scripts/step2_fgap_api_setup.py` | Creates FGAP v2 policy (`policy-user-manager`) + permissions |
 | `docker-compose.yml` → `step2-init` | Runs realm config bootstrap |
 | `docker-compose.yml` → `step2-fgap-init` | Runs FGAP v2 bootstrap |
+
+## 9. Self-Service Dashboard
+
+`user-manager` holders no longer need the full Keycloak admin console for day-to-day work. The standalone app in [`admin-console/`](../admin-console/README.md) (provisioned by [Step 11](Step_11_AdminConsole.md)) exposes an `/hr` dashboard covering everything this role is granted above: create/search users, enable/disable, reset credentials, resend the onboarding email, and assign/remove existing group membership. It intentionally has no group-creation UI, matching this role's policy. It is a curated UI only - every request still goes through the same `user-manager` access token and the FGAP v2 permissions documented above.
