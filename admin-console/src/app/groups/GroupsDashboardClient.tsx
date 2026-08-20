@@ -1,12 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
+import { ChevronDown, ChevronRight, FolderTree, Loader2, Plus, Users } from "lucide-react";
 import type { GroupTreeNode, KcUser } from "@/types/keycloak";
-
-interface Msg {
-  text: string;
-  type: "info" | "error";
-}
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -21,10 +30,13 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+function errMsg(err: unknown) {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export default function GroupsDashboardClient({ username }: { username: string }) {
   const [roots, setRoots] = useState<GroupTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState<Msg | null>(null);
   const [membersFor, setMembersFor] = useState<GroupTreeNode | null>(null);
 
   const load = useCallback(async () => {
@@ -33,7 +45,7 @@ export default function GroupsDashboardClient({ username }: { username: string }
       const data = await api<{ roots: GroupTreeNode[] }>("/api/pca/my-groups");
       setRoots(data.roots);
     } catch (err) {
-      setMsg({ text: String(err instanceof Error ? err.message : err), type: "error" });
+      toast.error(errMsg(err));
     } finally {
       setLoading(false);
     }
@@ -51,10 +63,10 @@ export default function GroupsDashboardClient({ username }: { username: string }
         method: "POST",
         body: JSON.stringify({ name: name.trim() }),
       });
-      setMsg({ text: `Created "${name.trim()}".`, type: "info" });
+      toast.success(`Created "${name.trim()}".`);
       load();
     } catch (err) {
-      setMsg({ text: String(err instanceof Error ? err.message : err), type: "error" });
+      toast.error(errMsg(err));
     }
   }
 
@@ -66,10 +78,10 @@ export default function GroupsDashboardClient({ username }: { username: string }
         method: "PATCH",
         body: JSON.stringify({ name: name.trim() }),
       });
-      setMsg({ text: `Renamed to "${name.trim()}".`, type: "info" });
+      toast.success(`Renamed to "${name.trim()}".`);
       load();
     } catch (err) {
-      setMsg({ text: String(err instanceof Error ? err.message : err), type: "error" });
+      toast.error(errMsg(err));
     }
   }
 
@@ -77,59 +89,71 @@ export default function GroupsDashboardClient({ username }: { username: string }
     if (!window.confirm(`Delete "${node.name}" and all of its subgroups? This cannot be undone.`)) return;
     try {
       await api(`/api/pca/groups/${node.id}`, { method: "DELETE" });
-      setMsg({ text: `Deleted "${node.name}".`, type: "info" });
+      toast.success(`Deleted "${node.name}".`);
       load();
     } catch (err) {
-      setMsg({ text: String(err instanceof Error ? err.message : err), type: "error" });
+      toast.error(errMsg(err));
     }
   }
 
   return (
-    <div className="wrap">
-      <div className="bar">
+    <div className="mx-auto max-w-6xl space-y-6 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1>Client App Group Management</h1>
-          <div className="muted">Signed in as {username}</div>
+          <h1 className="text-2xl font-semibold tracking-tight">Client App Group Management</h1>
+          <p className="text-sm text-muted-foreground">Signed in as {username}</p>
         </div>
-        <a href="/api/auth/signout">Sign out</a>
+        <Button variant="ghost" asChild>
+          <a href="/api/auth/signout">Sign out</a>
+        </Button>
       </div>
 
-      {msg && <div className={`msg ${msg.type}`}>{msg.text}</div>}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Your groups</CardTitle>
+          <CardDescription>
+            Create, rename, and delete subgroups, and manage membership, anywhere inside the groups you
+            administer below. Root groups themselves cannot be renamed or deleted.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+            </div>
+          )}
+          {!loading && roots.length === 0 && (
+            <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
+              <FolderTree className="h-8 w-8 opacity-50" />
+              <p>You are not a delegated administrator of any client application group yet.</p>
+              <p className="text-sm">Ask a realm admin or a client-manager to add you.</p>
+            </div>
+          )}
+          <div className="space-y-1">
+            {roots.map((root) => (
+              <GroupNode
+                key={root.id}
+                node={root}
+                depth={0}
+                isRoot
+                onCreateChild={createChild}
+                onRename={rename}
+                onDelete={remove}
+                onMembers={setMembersFor}
+              />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="card">
-        <p className="muted">
-          You can create, rename, and delete subgroups, and manage membership, anywhere inside the groups
-          you administer below. Root groups themselves cannot be renamed or deleted.
-        </p>
-        {loading && <p className="muted">Loading...</p>}
-        {!loading && roots.length === 0 && (
-          <p className="muted">
-            You are not a delegated administrator of any client application group yet. Ask a realm admin
-            or a client-manager to add you.
-          </p>
-        )}
-        {roots.map((root) => (
-          <GroupNode
-            key={root.id}
-            node={root}
-            isRoot
-            onCreateChild={createChild}
-            onRename={rename}
-            onDelete={remove}
-            onMembers={setMembersFor}
-          />
-        ))}
-      </div>
-
-      {membersFor && (
-        <MembersModal group={membersFor} onClose={() => setMembersFor(null)} onMessage={setMsg} />
-      )}
+      <MembersDialog group={membersFor} onOpenChange={(open) => !open && setMembersFor(null)} />
     </div>
   );
 }
 
 function GroupNode({
   node,
+  depth,
   isRoot,
   onCreateChild,
   onRename,
@@ -137,6 +161,7 @@ function GroupNode({
   onMembers,
 }: {
   node: GroupTreeNode;
+  depth: number;
   isRoot?: boolean;
   onCreateChild: (node: GroupTreeNode) => void;
   onRename: (node: GroupTreeNode) => void;
@@ -147,63 +172,65 @@ function GroupNode({
 
   return (
     <div>
-      <div className="tree-node">
+      <div
+        className="flex flex-wrap items-center gap-2 rounded-md py-1.5 hover:bg-accent/50"
+        style={{ paddingLeft: depth * 20 }}
+      >
         {node.children.length > 0 ? (
-          <button type="button" onClick={() => setExpanded(!expanded)} style={{ padding: "2px 6px" }}>
-            {expanded ? "-" : "+"}
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent"
+          >
+            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
         ) : (
-          <span style={{ width: 24, display: "inline-block" }} />
+          <span className="w-6" />
         )}
-        <strong>{node.name}</strong>
-        {isRoot && <span className="pill on">app root</span>}
-        <span className="muted">{node.path}</span>
-        <div className="row">
-          <button type="button" onClick={() => onCreateChild(node)}>
-            + Subgroup
-          </button>
-          <button type="button" onClick={() => onMembers(node)}>
-            Members
-          </button>
+        <span className="font-medium">{node.name}</span>
+        {isRoot && <Badge variant="secondary">app root</Badge>}
+        <span className="text-xs text-muted-foreground">{node.path}</span>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => onCreateChild(node)}>
+            <Plus /> Subgroup
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => onMembers(node)}>
+            <Users /> Members
+          </Button>
           {!isRoot && (
             <>
-              <button type="button" onClick={() => onRename(node)}>
+              <Button size="sm" variant="outline" onClick={() => onRename(node)}>
                 Rename
-              </button>
-              <button type="button" className="danger" onClick={() => onDelete(node)}>
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => onDelete(node)}>
                 Delete
-              </button>
+              </Button>
             </>
           )}
         </div>
       </div>
-      {expanded && node.children.length > 0 && (
-        <ul className="tree">
-          {node.children.map((child) => (
-            <li key={child.id}>
-              <GroupNode
-                node={child}
-                onCreateChild={onCreateChild}
-                onRename={onRename}
-                onDelete={onDelete}
-                onMembers={onMembers}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+      {expanded &&
+        node.children.map((child) => (
+          <GroupNode
+            key={child.id}
+            node={child}
+            depth={depth + 1}
+            onCreateChild={onCreateChild}
+            onRename={onRename}
+            onDelete={onDelete}
+            onMembers={onMembers}
+          />
+        ))}
     </div>
   );
 }
 
-function MembersModal({
+function MembersDialog({
   group,
-  onClose,
-  onMessage,
+  onOpenChange,
 }: {
-  group: GroupTreeNode;
-  onClose: () => void;
-  onMessage: (m: Msg) => void;
+  group: GroupTreeNode | null;
+  onOpenChange: (open: boolean) => void;
 }) {
   const [members, setMembers] = useState<KcUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -211,6 +238,7 @@ function MembersModal({
   const [results, setResults] = useState<KcUser[]>([]);
 
   const load = useCallback(async () => {
+    if (!group) return;
     setLoading(true);
     try {
       const data = await api<{ members: KcUser[] }>(`/api/pca/groups/${group.id}/members`);
@@ -218,11 +246,15 @@ function MembersModal({
     } finally {
       setLoading(false);
     }
-  }, [group.id]);
+  }, [group]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (group) {
+      setQuery("");
+      setResults([]);
+      load();
+    }
+  }, [group, load]);
 
   async function search(q: string) {
     setQuery(q);
@@ -235,6 +267,7 @@ function MembersModal({
   }
 
   async function add(u: KcUser) {
+    if (!group) return;
     try {
       await api(`/api/pca/groups/${group.id}/members`, {
         method: "POST",
@@ -244,63 +277,73 @@ function MembersModal({
       setResults([]);
       load();
     } catch (err) {
-      onMessage({ text: String(err instanceof Error ? err.message : err), type: "error" });
+      toast.error(errMsg(err));
     }
   }
 
   async function remove(u: KcUser) {
+    if (!group) return;
     try {
       await api(`/api/pca/groups/${group.id}/members/${u.id}`, { method: "DELETE" });
       load();
     } catch (err) {
-      onMessage({ text: String(err instanceof Error ? err.message : err), type: "error" });
+      toast.error(errMsg(err));
     }
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Members: {group.name}</h2>
+    <Dialog open={!!group} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Members: {group?.name}</DialogTitle>
+        </DialogHeader>
         {loading ? (
-          <p className="muted">Loading...</p>
+          <p className="text-sm text-muted-foreground">Loading...</p>
         ) : (
-          <>
-            <div className="field">
-              {members.length === 0 && <span className="muted">No members yet.</span>}
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              {members.length === 0 && <p className="text-sm text-muted-foreground">No members yet.</p>}
               {members.map((u) => (
-                <div key={u.id} className="row" style={{ justifyContent: "space-between" }}>
+                <div key={u.id} className="flex items-center justify-between rounded-md border px-3 py-1.5 text-sm">
                   <span>
                     {u.username} {u.email ? `(${u.email})` : ""}
                   </span>
-                  <button type="button" onClick={() => remove(u)}>
+                  <Button size="sm" variant="ghost" onClick={() => remove(u)}>
                     Remove
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
-            <div className="field">
-              <label>Add existing user</label>
-              <input
+            <div className="space-y-1.5">
+              <Label>Add existing user</Label>
+              <Input
                 placeholder="Search by username, name, or email..."
                 value={query}
                 onChange={(e) => search(e.target.value)}
               />
-              {results.map((u) => (
-                <div key={u.id}>
-                  <button type="button" onClick={() => add(u)}>
-                    + {u.username} {u.email ? `(${u.email})` : ""}
-                  </button>
+              {results.length > 0 && (
+                <div className="rounded-md border p-2 text-sm">
+                  {results.map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => add(u)}
+                      className="block w-full rounded px-2 py-1 text-left hover:bg-accent"
+                    >
+                      + {u.username} {u.email ? `(${u.email})` : ""}
+                    </button>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          </>
+          </div>
         )}
-        <div className="row" style={{ justifyContent: "flex-end" }}>
-          <button type="button" onClick={onClose}>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

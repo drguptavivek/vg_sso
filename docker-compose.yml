@@ -339,7 +339,7 @@ services:
     env_file:
       - .env
     environment:
-      ADMIN_CONSOLE_KEYCLOAK_REALM: ${KC_NEW_REALM_NAME:-org-new-delhi}
+      # KC_NEW_REALM_NAME itself already reaches this container via `env_file: .env` above.
       ADMIN_CONSOLE_CLIENT_ID: ${ADMIN_CONSOLE_CLIENT_ID:-hr-client-admin-console}
       ADMIN_CONSOLE_CLIENT_SECRET: ${ADMIN_CONSOLE_CLIENT_SECRET:-}
       ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL: ${ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL:-http://localhost:8080}

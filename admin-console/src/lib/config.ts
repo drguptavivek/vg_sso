@@ -24,8 +24,23 @@ function optional(name: string, fallback: string): string {
   return value && value.trim() !== "" ? value : fallback;
 }
 
+/**
+ * Prefer the same KC_NEW_REALM_NAME already set in the root .env for the
+ * rest of the stack (docker compose passes it through via `env_file: .env`),
+ * so the target realm only needs to be configured in one place. Falls back
+ * to ADMIN_CONSOLE_KEYCLOAK_REALM for standalone (non-docker-compose) setups
+ * that want this app pointed at a different realm.
+ */
+function realmName(): string {
+  const fromRootEnv = process.env.KC_NEW_REALM_NAME;
+  if (fromRootEnv && fromRootEnv.trim() !== "") {
+    return fromRootEnv.trim();
+  }
+  return required("ADMIN_CONSOLE_KEYCLOAK_REALM");
+}
+
 export const config = {
-  realm: required("ADMIN_CONSOLE_KEYCLOAK_REALM"),
+  realm: realmName(),
   clientId: required("ADMIN_CONSOLE_CLIENT_ID"),
   clientSecret: required("ADMIN_CONSOLE_CLIENT_SECRET"),
   nextAuthSecret: required("NEXTAUTH_SECRET"),
