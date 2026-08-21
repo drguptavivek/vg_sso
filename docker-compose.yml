@@ -355,11 +355,15 @@ services:
       # a public-facing reverse proxy.
       #   - nginx co-located on this same docker host: leave the default
       #     (127.0.0.1) and reverse-proxy to 127.0.0.1:ADMIN_CONSOLE_PORT.
-      #   - nginx running on a SEPARATE (e.g. LAN-only) host: set
-      #     ADMIN_CONSOLE_BIND_IP to this host's LAN-reachable IP in your own
-      #     (gitignored) root .env, and restrict ADMIN_CONSOLE_PORT at the
-      #     host firewall to accept connections only from that nginx host's
-      #     IP - the port binding alone is not access control in that case.
+      #   - nginx running on a SEPARATE host (e.g. a LAN-only reverse proxy,
+      #     as opposed to the public/global one): set ADMIN_CONSOLE_BIND_IP
+      #     to this VM's (single) ingress IP in your own (gitignored) root
+      #     .env, and at the host firewall accept inbound connections to
+      #     ADMIN_CONSOLE_PORT only from that LAN nginx box's source IP,
+      #     denying everyone else on that port - including the global nginx,
+      #     which reaches this same VM IP for other services. The bind
+      #     address alone is not access control once it's not 127.0.0.1;
+      #     the firewall source-IP rule is what actually restricts it.
       #     See nginx-confs/hr-admin-console.conf for a proposed vhost.
       - "${ADMIN_CONSOLE_BIND_IP:-127.0.0.1}:${ADMIN_CONSOLE_PORT:-3100}:3100"
 
