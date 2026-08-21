@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { config } from "@/lib/config";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { SignOutButton } from "@/components/SignOutButton";
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
@@ -13,6 +13,9 @@ export default async function HomePage() {
   }
 
   const roles = session.roles ?? [];
+  if (session.isRealmAdmin) {
+    redirect("/hr");
+  }
   if (roles.includes(config.userManagerRole)) {
     redirect("/hr");
   }
@@ -38,9 +41,7 @@ export default async function HomePage() {
           <p className="text-muted-foreground">
             Ask a realm administrator to grant one of these roles, then sign in again.
           </p>
-          <Button asChild variant="outline">
-            <a href="/api/auth/signout">Sign out</a>
-          </Button>
+          <SignOutButton variant="outline" />
         </CardContent>
       </Card>
     </div>

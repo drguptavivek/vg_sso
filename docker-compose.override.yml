@@ -56,6 +56,19 @@ services:
     volumes:
       - ./scripts:/opt/keycloak/scripts:ro
 
-  step11-init:
+  admin-console:
+    build:
+      target: deps
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      WATCHPACK_POLLING: "true"
+    command: [ "npm", "run", "dev", "--", "--hostname", "0.0.0.0" ]
     volumes:
-      - ./scripts:/opt/keycloak/scripts:ro
+      - ./admin-console:/app
+      - admin_console_node_modules:/app/node_modules
+      - admin_console_next_cache:/app/.next
+
+volumes:
+  admin_console_node_modules:
+  admin_console_next_cache:

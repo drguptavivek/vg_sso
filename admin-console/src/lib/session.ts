@@ -6,6 +6,7 @@ export interface AuthorizedContext {
   accessToken: string;
   userId: string;
   roles: string[];
+  isRealmAdmin: boolean;
 }
 
 export type RequireRoleResult =
@@ -13,7 +14,7 @@ export type RequireRoleResult =
   | { ok: false; response: NextResponse };
 
 /**
- * Confirms the caller has a live Keycloak session with the given realm role.
+ * Confirms the caller has a live Keycloak session with the given realm role, or holds realm-management/realm-admin.
  * This is a UX gate for this app's own routes only - the authoritative
  * authorization decision for every mutation still happens inside Keycloak
  * itself (FGAP v2 + the delegated-admin-guard SPI) when we call the Admin
@@ -36,7 +37,7 @@ export async function requireRole(role: string): Promise<RequireRoleResult> {
     };
   }
 
-  if (!session.roles?.includes(role)) {
+  if (!session.isRealmAdmin && !session.roles?.includes(role)) {
     return {
       ok: false,
       response: NextResponse.json({ error: `Missing required role: ${role}` }, { status: 403 }),
@@ -45,6 +46,11 @@ export async function requireRole(role: string): Promise<RequireRoleResult> {
 
   return {
     ok: true,
-    ctx: { accessToken: session.accessToken, userId: session.userId ?? "", roles: session.roles },
+    ctx: {
+      accessToken: session.accessToken,
+      userId: session.userId ?? "",
+      roles: session.roles,
+      isRealmAdmin: session.isRealmAdmin,
+    },
   };
 }

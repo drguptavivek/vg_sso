@@ -307,39 +307,18 @@ services:
       - keycloak_data:/opt/keycloak/data
     entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step10_user_onboarding_setup.sh" ]
 
-  step11-init:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: vg-step11-init
-    restart: "no"
-    depends_on:
-      step10-init:
-        condition: service_completed_successfully
-    env_file:
-      - .env
-    environment:
-      STEP11_FORCE: ${STEP11_FORCE:-false}
-      ADMIN_CONSOLE_CLIENT_ID: ${ADMIN_CONSOLE_CLIENT_ID:-hr-client-admin-console}
-      ADMIN_CONSOLE_CLIENT_SECRET: ${ADMIN_CONSOLE_CLIENT_SECRET:-}
-      ADMIN_CONSOLE_APP_URL: ${ADMIN_CONSOLE_APP_URL:-http://localhost:3100}
-    volumes:
-      - keycloak_data:/opt/keycloak/data
-    entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step11_admin_console_client_setup.sh" ]
-
   admin-console:
+    profiles: [ "admin-console" ]
     build:
       context: ./admin-console
       dockerfile: Dockerfile
     container_name: vg-admin-console
     restart: unless-stopped
     depends_on:
-      step11-init:
-        condition: service_completed_successfully
-    env_file:
-      - .env
+      keycloak:
+        condition: service_healthy
     environment:
-      # KC_NEW_REALM_NAME itself already reaches this container via `env_file: .env` above.
+      KC_NEW_REALM_NAME: ${KC_NEW_REALM_NAME}
       ADMIN_CONSOLE_CLIENT_ID: ${ADMIN_CONSOLE_CLIENT_ID:-hr-client-admin-console}
       ADMIN_CONSOLE_CLIENT_SECRET: ${ADMIN_CONSOLE_CLIENT_SECRET:-}
       ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL: ${ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL:-http://localhost:8080}

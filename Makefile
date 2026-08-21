@@ -2,6 +2,8 @@ SHELL := /bin/bash
 
 COMPOSE := docker compose -f docker-compose.yml -f docker-compose.override.yml
 COMPOSE_PROD := docker compose -f docker-compose.yml
+ADMIN_CONSOLE_ENV_FILE ?= .env.admin-console
+ADMIN_CONSOLE_COMPOSE := docker compose --env-file .env --env-file $(ADMIN_CONSOLE_ENV_FILE) -f docker-compose.yml -f docker-compose.override.yml --profile admin-console
 COMPOSE_UPGRADE_TEST := docker compose -p vg_sso_upgrade_test -f docker-compose.upgrade-test.yml
 UPGRADE_TEST_VERSION ?= 26.6.3
 UPGRADE_TEST_IMAGE ?= vg_sso-keycloak-upgrade-test:$(UPGRADE_TEST_VERSION)
@@ -12,6 +14,7 @@ SPI_MVN_ARGS ?=
 	logs-all \
 	logs-runtime logs-init \
 	force-step1 force-step2 force-step3 force-step4 force-step5 force-step6 force-step7 force-step7-fgap force-step8 force-step9 force-step10 maintenance audit-export backup full-backup \
+	admin-console-build admin-console-up admin-console-stop admin-console-logs \
 	test-config test-step6 test-step7 \
 	upgrade-test-build upgrade-test-db-copy upgrade-test-up upgrade-test-logs upgrade-test-version upgrade-test-down upgrade-test-reset
 
@@ -41,6 +44,11 @@ help:
 	@echo "  make force-step8      Re-run step8-init"
 	@echo "  make force-step9      Re-run step9-init (archive setup)"
 	@echo "  make force-step10     Re-run step10-init (user onboarding mail setup)"
+	@echo "    First: cp .env.admin-console.template .env.admin-console and set real values"
+	@echo "  make admin-console-build Build optional admin-console images"
+	@echo "  make admin-console-up    Start the optional Next.js service"
+	@echo "  make admin-console-stop  Stop the optional Next.js service"
+	@echo "  make admin-console-logs  Tail optional admin-console logs"
 	@echo "  make maintenance      Run custom command in keycloak-maintenance (MAINT_CMD='...')"
 	@echo "  make audit-export     Run audit export now (updates watermark)"
 	@echo "  make backup           Dump DB and copy .env/.local into ~/sso_backups/<timestamp>"
@@ -150,6 +158,18 @@ force-step9:
 
 force-step10:
 	$(COMPOSE) run --rm -e STEP10_FORCE=true step10-init
+
+admin-console-build:
+	$(ADMIN_CONSOLE_COMPOSE) build admin-console
+
+admin-console-up:
+	$(ADMIN_CONSOLE_COMPOSE) up -d --no-deps admin-console
+
+admin-console-stop:
+	$(ADMIN_CONSOLE_COMPOSE) stop admin-console
+
+admin-console-logs:
+	$(ADMIN_CONSOLE_COMPOSE) logs --timestamps --tail=200 -f admin-console
 
 maintenance:
 	$(COMPOSE) run --rm --no-build keycloak-maintenance /bin/bash -lc "$${MAINT_CMD:?Set MAINT_CMD='...'}"

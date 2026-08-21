@@ -5,6 +5,7 @@ Archive.zip
 .local/
 .kcadm.realm.config
 .env
+.env.admin-console
 keycloak-[0-9]*/
 keycloak-*.tar.gz
 keycloak-current

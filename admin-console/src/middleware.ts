@@ -16,12 +16,13 @@ export default withAuth(
           return false;
         }
         const roles = (token.roles as string[] | undefined) ?? [];
+        const isRealmAdmin = token.isRealmAdmin === true;
         const path = req.nextUrl.pathname;
         if (path.startsWith("/hr")) {
-          return roles.includes(USER_MANAGER_ROLE);
+          return isRealmAdmin || roles.includes(USER_MANAGER_ROLE);
         }
         if (path.startsWith("/groups")) {
-          return roles.includes(DELEGATED_CLIENT_ADMIN_ROLE);
+          return isRealmAdmin || roles.includes(DELEGATED_CLIENT_ADMIN_ROLE);
         }
         return true;
       },

@@ -3,12 +3,34 @@ import { config } from "./config";
 import type { KcGroup } from "@/types/keycloak";
 
 /**
- * Returns the full paths of AppRoles/{clientId} groups the caller is a
+ * Returns the full paths of AppRoles/{clientId} groups the caller may administer. Realm admins receive every direct client root; delegated admins receive roots they are a
  * *direct* member of - i.e. the app roots they administer as a delegated
  * client admin. Mirrors the ownership derivation already enforced
  * server-side by DelegatedAdminGuardFilter in custom-delegated-admin-guard-spi.
  */
-export async function getOwnedRootPaths(accessToken: string, userId: string): Promise<string[]> {
+export async function getOwnedRootPaths(
+  accessToken: string,
+  userId: string,
+  isRealmAdmin = false,
+): Promise<string[]> {
+  if (isRealmAdmin) {
+    const appRolesPath = "/" + config.appRolesGroupName;
+    const { data: matches } = await kcAdminRequest<KcGroup[]>(accessToken, "/groups", {
+      query: { search: config.appRolesGroupName, briefRepresentation: "true", max: "500" },
+    });
+    const appRoles = (matches ?? []).find((group) => group.path === appRolesPath);
+    if (!appRoles?.id) return [];
+
+    const { data: children } = await kcAdminRequest<KcGroup[]>(
+      accessToken,
+      "/groups/" + appRoles.id + "/children",
+      { query: { briefRepresentation: "true", max: "1000" } },
+    );
+    return (children ?? [])
+      .map((group) => group.path)
+      .filter((path): path is string => Boolean(path));
+  }
+
   const { data } = await kcAdminRequest<KcGroup[]>(accessToken, `/users/${userId}/groups`, {
     query: { briefRepresentation: "false", max: "1000" },
   });

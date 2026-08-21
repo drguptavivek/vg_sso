@@ -23,10 +23,16 @@ export interface KeycloakAccessTokenPayload {
   preferred_username?: string;
   email?: string;
   realm_access?: { roles?: string[] };
+  resource_access?: Record<string, { roles?: string[] }>;
   exp?: number;
 }
 
 export function realmRolesFromAccessToken(accessToken: string): string[] {
   const payload = decodeJwtPayload<KeycloakAccessTokenPayload>(accessToken);
   return payload?.realm_access?.roles ?? [];
+}
+
+export function isRealmAdminFromAccessToken(accessToken: string): boolean {
+  const payload = decodeJwtPayload<KeycloakAccessTokenPayload>(accessToken);
+  return payload?.resource_access?.["realm-management"]?.roles?.includes("realm-admin") ?? false;
 }

@@ -10,10 +10,15 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-async function assertOwnedGroup(accessToken: string, userId: string, groupId: string) {
+async function assertOwnedGroup(
+  accessToken: string,
+  userId: string,
+  groupId: string,
+  isRealmAdmin: boolean,
+) {
   const [current, ownedRootPaths] = await Promise.all([
     kcAdminRequest<KcGroup>(accessToken, `/groups/${groupId}`),
-    getOwnedRootPaths(accessToken, userId),
+    getOwnedRootPaths(accessToken, userId, isRealmAdmin),
   ]);
   const group = current.data;
   if (!group) {
@@ -38,7 +43,12 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   const { id } = await params;
 
   try {
-    const owned = await assertOwnedGroup(auth.ctx.accessToken, auth.ctx.userId, id);
+    const owned = await assertOwnedGroup(
+      auth.ctx.accessToken,
+      auth.ctx.userId,
+      id,
+      auth.ctx.isRealmAdmin,
+    );
     if (!owned.ok) return owned.response;
 
     const { data } = await kcAdminRequest<KcUser[]>(auth.ctx.accessToken, `/groups/${id}/members`, {
@@ -61,7 +71,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const owned = await assertOwnedGroup(auth.ctx.accessToken, auth.ctx.userId, id);
+    const owned = await assertOwnedGroup(
+      auth.ctx.accessToken,
+      auth.ctx.userId,
+      id,
+      auth.ctx.isRealmAdmin,
+    );
     if (!owned.ok) return owned.response;
 
     await kcAdminRequest(auth.ctx.accessToken, `/users/${body.userId}/groups/${id}`, {

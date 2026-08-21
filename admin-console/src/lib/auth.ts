@@ -1,6 +1,6 @@
 import type { NextAuthOptions, Profile } from "next-auth";
 import { config, keycloakRealmInternalUrl, keycloakRealmPublicUrl } from "./config";
-import { realmRolesFromAccessToken } from "./jwt";
+import { isRealmAdminFromAccessToken, realmRolesFromAccessToken } from "./jwt";
 
 interface KeycloakProfile extends Profile {
   sub: string;
@@ -13,7 +13,6 @@ interface RefreshedTokens {
   access_token: string;
   refresh_token?: string;
   expires_in: number;
-  id_token?: string;
 }
 
 async function refreshAccessToken(refreshToken: string): Promise<RefreshedTokens | null> {
@@ -48,6 +47,8 @@ export const authOptions: NextAuthOptions = {
       type: "oauth",
       clientId: config.clientId,
       clientSecret: config.clientSecret,
+      issuer: keycloakRealmPublicUrl(),
+      jwks_endpoint: `${keycloakRealmInternalUrl()}/protocol/openid-connect/certs`,
       idToken: true,
       checks: ["pkce", "state"],
       authorization: {
@@ -78,9 +79,9 @@ export const authOptions: NextAuthOptions = {
         // Initial sign-in.
         token.accessToken = account.access_token as string;
         token.refreshToken = account.refresh_token as string | undefined;
-        token.idToken = account.id_token as string | undefined;
         token.accessTokenExpires = Date.now() + Number(account.expires_in ?? 60) * 1000;
         token.roles = realmRolesFromAccessToken(account.access_token as string);
+        token.isRealmAdmin = isRealmAdminFromAccessToken(account.access_token as string);
         token.userId = user.id;
         token.username = (user as { username?: string }).username;
         delete token.error;
@@ -104,9 +105,9 @@ export const authOptions: NextAuthOptions = {
         ...token,
         accessToken: refreshed.access_token,
         refreshToken: refreshed.refresh_token ?? token.refreshToken,
-        idToken: refreshed.id_token ?? token.idToken,
         accessTokenExpires: Date.now() + refreshed.expires_in * 1000,
         roles: realmRolesFromAccessToken(refreshed.access_token),
+        isRealmAdmin: isRealmAdminFromAccessToken(refreshed.access_token),
         error: undefined,
       };
     },
@@ -114,15 +115,12 @@ export const authOptions: NextAuthOptions = {
       session.accessToken = token.accessToken as string | undefined;
       session.error = token.error as string | undefined;
       session.roles = (token.roles as string[] | undefined) ?? [];
+      session.isRealmAdmin = token.isRealmAdmin === true;
       session.userId = token.userId as string | undefined;
       if (session.user) {
         (session.user as { username?: string }).username = token.username as string | undefined;
       }
       return session;
     },
-  },
-  pages: {
-    signIn: "/api/auth/signin",
-    error: "/api/auth/error",
   },
 };

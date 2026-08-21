@@ -9,9 +9,14 @@ export default async function HrPage() {
   if (!session) {
     redirect("/api/auth/signin");
   }
-  if (!session.roles?.includes(config.userManagerRole)) {
+  if (!session.isRealmAdmin && !session.roles?.includes(config.userManagerRole)) {
     redirect("/");
   }
 
-  return <HrDashboardClient username={session.user?.name ?? session.userId ?? "unknown"} />;
+  return (
+    <HrDashboardClient
+      username={session.user?.name ?? session.userId ?? "unknown"}
+      showGroupsLink={session.isRealmAdmin}
+    />
+  );
 }

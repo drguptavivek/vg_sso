@@ -9,9 +9,15 @@ export default async function GroupsPage() {
   if (!session) {
     redirect("/api/auth/signin");
   }
-  if (!session.roles?.includes(config.delegatedClientAdminRole)) {
+  if (!session.isRealmAdmin && !session.roles?.includes(config.delegatedClientAdminRole)) {
     redirect("/");
   }
 
-  return <GroupsDashboardClient username={session.user?.name ?? session.userId ?? "unknown"} />;
+  return (
+    <GroupsDashboardClient
+      username={session.user?.name ?? session.userId ?? "unknown"}
+      showHrLink={session.isRealmAdmin}
+      isRealmAdmin={session.isRealmAdmin}
+    />
+  );
 }

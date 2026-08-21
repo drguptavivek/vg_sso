@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Loader2, Plus, Search, UserRound } from "lucide-react";
 import type { KcGroup, KcUser } from "@/types/keycloak";
 import { Button } from "@/components/ui/button";
+import { SignOutButton } from "@/components/SignOutButton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +38,13 @@ function errMsg(err: unknown) {
   return err instanceof Error ? err.message : String(err);
 }
 
-export default function HrDashboardClient({ username }: { username: string }) {
+export default function HrDashboardClient({
+  username,
+  showGroupsLink = false,
+}: {
+  username: string;
+  showGroupsLink?: boolean;
+}) {
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<KcUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -92,12 +99,15 @@ export default function HrDashboardClient({ username }: { username: string }) {
           <p className="text-sm text-muted-foreground">Signed in as {username}</p>
         </div>
         <div className="flex items-center gap-3">
+          {showGroupsLink && (
+            <Button variant="outline" asChild>
+              <a href="/groups">Groups</a>
+            </Button>
+          )}
           <Button onClick={() => setShowCreate(true)}>
             <Plus /> Create user
           </Button>
-          <Button variant="ghost" asChild>
-            <a href="/api/auth/signout">Sign out</a>
-          </Button>
+          <SignOutButton />
         </div>
       </div>
 

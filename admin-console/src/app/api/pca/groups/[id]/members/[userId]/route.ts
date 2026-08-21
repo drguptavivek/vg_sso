@@ -19,7 +19,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   try {
     const [current, ownedRootPaths] = await Promise.all([
       kcAdminRequest<KcGroup>(auth.ctx.accessToken, `/groups/${id}`),
-      getOwnedRootPaths(auth.ctx.accessToken, auth.ctx.userId),
+      getOwnedRootPaths(auth.ctx.accessToken, auth.ctx.userId, auth.ctx.isRealmAdmin),
     ]);
     const group = current.data;
     if (!group) {

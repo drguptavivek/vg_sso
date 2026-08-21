@@ -40,6 +40,7 @@ function realmName(): string {
 }
 
 export const config = {
+  appUrl: required("NEXTAUTH_URL").replace(/\/+$/, ""),
   realm: realmName(),
   clientId: required("ADMIN_CONSOLE_CLIENT_ID"),
   clientSecret: required("ADMIN_CONSOLE_CLIENT_SECRET"),

@@ -9,14 +9,29 @@ export async function GET(req: NextRequest) {
   const auth = await requireRole(config.userManagerRole);
   if (!auth.ok) return auth.response;
 
-  const search = req.nextUrl.searchParams.get("search") ?? undefined;
+  const rawSearch = req.nextUrl.searchParams.get("search")?.trim();
+  const searchTerm = rawSearch?.replace(/\*/g, "");
+  const search = searchTerm ? "*" + searchTerm + "*" : undefined;
   const max = req.nextUrl.searchParams.get("max") ?? "50";
 
   try {
-    const { data } = await kcAdminRequest<KcUser[]>(auth.ctx.accessToken, "/users", {
-      query: { search, max, briefRepresentation: "true" },
-    });
-    return NextResponse.json({ users: data ?? [] });
+    const requests = [
+      kcAdminRequest<KcUser[]>(auth.ctx.accessToken, "/users", {
+        query: { search, max, briefRepresentation: "true" },
+      }),
+    ];
+    if (searchTerm) {
+      requests.push(
+        kcAdminRequest<KcUser[]>(auth.ctx.accessToken, "/users", {
+          query: { email: searchTerm, exact: "false", max, briefRepresentation: "true" },
+        }),
+      );
+    }
+    const results = await Promise.all(requests);
+    const users = Array.from(
+      new Map(results.flatMap((result) => result.data ?? []).map((user) => [user.id, user])).values(),
+    ).slice(0, Number(max));
+    return NextResponse.json({ users });
   } catch (err) {
     return errorResponse(err);
   }

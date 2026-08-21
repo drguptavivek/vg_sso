@@ -5,9 +5,10 @@ Standalone Next.js app providing two self-service dashboards on top of the Keycl
 ## Dashboards
 
 - `/hr` - for holders of the `user-manager` realm role: search/create users, enable/disable, reset credentials, resend the onboarding email (verify email, set password, TOTP, recovery codes), and assign/remove existing group membership. Group creation is intentionally out of scope for this role.
-- `/groups` - for holders of the `delegated-client-admin-base` realm role (delegated client admins / PCAs): create, rename, and delete subgroups, and manage membership, scoped to the caller's own `AppRoles/{clientId}` subtree(s). The app root itself cannot be renamed or deleted.
+- `/groups` - delegated administrators manage application roles inside owned `AppRoles/{clientId}` roots; realm admins see realm-wide groups and every application. Application cards show direct-member counts and open member management when clicked.
+- Holders of `realm-management -> realm-admin` have full access to both dashboards plus the user-group audit view, which summarizes realm memberships, delegated-admin roots, and application roles.
 
-Visiting `/` redirects to the dashboard matching the signed-in user's role, or shows a message if they hold neither role.
+Visiting `/` redirects realm administrators to `/hr`; other users are routed to the dashboard matching their application role or shown a missing-role message.
 
 ## Screenshots
 
@@ -34,7 +35,7 @@ So this app is a curated UI over capability that already exists, not a new privi
 
 ## Configuration
 
-See the "Admin console app" section of the repo root `.env.template`. For local development outside docker compose, copy `.env.local.example` to `.env.local` and adjust as needed.
+For Docker Compose, copy the repo root `.env.admin-console.template` to `.env.admin-console`. For local development outside Docker Compose, copy `.env.local.example` to `.env.local` and adjust as needed.
 
 Two Keycloak URLs are configured separately to support running inside docker compose:
 
@@ -54,13 +55,15 @@ The app listens on `http://localhost:3100` by default.
 
 ## Docker compose
 
-The app is built and run as the `admin-console` service (see `docker-compose.yml`), depending on `step11-init`, which creates its confidential OIDC client (`ADMIN_CONSOLE_CLIENT_ID`) in the target realm. Set `ADMIN_CONSOLE_CLIENT_SECRET` and `ADMIN_CONSOLE_NEXTAUTH_SECRET` to real values in `.env` before starting the stack - `step11-init` refuses to run with placeholder values.
+The app is excluded from normal stack startup and runs only under the `admin-console` Compose profile. Configure its confidential OIDC client manually as documented in `docs/AdminConsole.md`, copy `.env.admin-console.template` to `.env.admin-console`, then run `make admin-console-build` and `make admin-console-up`.
+
+With `docker-compose.override.yml`, the `admin-console` service runs `next dev` in HMR mode. The host `./admin-console` directory is mounted at `/app`, while `node_modules` and `.next` use isolated named volumes so source edits reload without rebuilding the image. The base `docker-compose.yml` remains production-oriented and runs the standalone Next.js image.
 
 ## Exposure
 
 This is an admin surface (user creation, password resets, group membership) and must never be reachable from the public internet or from a public-facing reverse proxy.
 
-`docker-compose.yml` publishes it on `127.0.0.1` only by default (`ADMIN_CONSOLE_BIND_IP` in `.env.template`). Two deployment shapes:
+`docker-compose.yml` publishes it on `127.0.0.1` only by default (`ADMIN_CONSOLE_BIND_IP` in `.env.admin-console.template`). Two deployment shapes:
 
 - **Reverse proxy on the same docker host:** leave `ADMIN_CONSOLE_BIND_IP` at its default (`127.0.0.1`) and proxy to `127.0.0.1:ADMIN_CONSOLE_PORT`.
 - **Reverse proxy on a separate host** (e.g. a LAN-only nginx that is distinct from a public/global-facing nginx, both of which reach this VM on the same single ingress IP for their respective services): set `ADMIN_CONSOLE_BIND_IP` to this VM's ingress IP, and at the docker host's own firewall accept connections to `ADMIN_CONSOLE_PORT` only from the LAN reverse proxy's source IP, denying everyone else on that port - including the global nginx. The bind address by itself is not access control once it's not `127.0.0.1` - the firewall's source-IP rule is what actually keeps everything else out. This only works if the LAN nginx and the global nginx present different source IPs to this VM (distinct hosts, as is the case here); if they ever shared a source IP this approach wouldn't distinguish them and a different mechanism would be needed. This app's vhost must only ever be added to the LAN-facing proxy, never the public/global one.
