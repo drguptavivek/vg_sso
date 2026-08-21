@@ -57,6 +57,13 @@ This is an admin surface (user creation, password resets, group membership) and 
 
 See [`nginx-confs/hr-admin-console.conf`](../nginx-confs/hr-admin-console.conf) for a proposed vhost for the separate-host/LAN-proxy shape (placeholders: hostname, this VM's ingress IP, TLS cert paths).
 
+### Where to enforce the source-IP restriction
+
+Either of these enforces the same rule - allow only the LAN reverse proxy's source IP to reach this VM's ingress IP on `ADMIN_CONSOLE_PORT`, deny every other source (including the global/public reverse proxy) - just at different points in the path:
+
+- **Network-level firewall (recommended if available):** if there is a zone-aware firewall upstream of the docker VM (separate from the VM itself) that can filter by source zone/IP to a destination IP:port, enforce it there. This is the cleaner option: the restriction applies before traffic ever reaches the VM's NIC, so it entirely sidesteps the Docker/ufw ordering issue below, since there is no local iptables interaction to fight with. This should be the primary control if you have it.
+- **Host-level (ufw on the VM):** useful as defense in depth on top of the network firewall, or as the only control if there is no upstream firewall capable of this. Has the Docker interaction described below, so it needs the `DOCKER-USER`-chain approach rather than a plain `ufw allow/deny`.
+
 ### Firewall rule (ufw): important Docker gotcha
 
 `ADMIN_CONSOLE_PORT` is published by Docker via a `-p` port mapping (that's what the `ports:` entry in `docker-compose.yml` does). Docker manages that by inserting its own iptables rules directly into the `DOCKER-USER`/`DOCKER` chains, and those rules are evaluated **before** ufw's normal `INPUT` chain. A plain `ufw allow from <ip> to any port ...` / `ufw deny <port>/tcp` pair looks correct but **does not actually restrict a docker-published port** - traffic still gets through, because it never reaches the ufw rule that would have blocked it. This is a well-known ufw+Docker interaction, not specific to this app.
