@@ -55,3 +55,7 @@ services:
   step10-init:
     volumes:
       - ./scripts:/opt/keycloak/scripts:ro
+
+  step11-init:
+    volumes:
+      - ./scripts:/opt/keycloak/scripts:ro

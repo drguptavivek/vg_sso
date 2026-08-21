@@ -10,7 +10,8 @@ Use `docker compose` plus the helper scripts below instead of manually starting 
   - `keycloak`
   - `step1-init`
   - `step2-init`
-  - `step3-init` ... `step10-init`
+  - `step3-init` ... `step11-init`
+  - `admin-console` (standalone HR / delegated client-admin self-service app, see below)
   - `keycloak-maintenance` (routine maintenance runner)
 - `docker-compose.override.yml` is the local development overlay:
   - exposes `8080`, `9000`, and `5432`
@@ -136,6 +137,7 @@ Local access with the dev overlay:
 - Keycloak: `http://localhost:8080`
 - Management: `http://localhost:9000/management`
 - Postgres: `localhost:5432`
+- Admin console app: `http://localhost:3100`
 
 ## Bootstrap Flow
 
@@ -173,8 +175,21 @@ The compose workflow is intentionally split into one-shot init containers:
 12. `step10-init`
    - enables forgot-password recovery and registers the user onboarding email listener
    - drives admin-created user onboarding by sending execute-actions email for email verification, password setup, TOTP enrollment, and recovery-code generation
+13. `step11-init`
+   - creates the OIDC client for the standalone `admin-console/` app (see below)
 
 Each step writes a marker file into the shared Keycloak data volume and skips on later runs unless forced.
+
+## Admin Console App
+
+`admin-console/` is a standalone Next.js app (its own `docker-compose.yml` service, built from `admin-console/Dockerfile`) giving self-service dashboards to two existing roles instead of the full Keycloak admin console:
+
+- `/hr` for `user-manager` holders: create/search users, enable/disable, reset credentials, resend onboarding email, assign/remove existing group membership.
+- `/groups` for `delegated-client-admin-base` holders: create/rename/delete subgroups and manage membership, scoped to their own `AppRoles/{clientId}` subtree.
+
+It authenticates via the OIDC client `step11-init` provisions and then calls Keycloak's own Admin REST API with the signed-in user's access token - it introduces no new authorization surface, only a curated UI over the FGAP v2 + `custom-delegated-admin-guard-spi` model documented in [`docs/user-manager-policy.md`](docs/user-manager-policy.md), [`docs/delegated-client-admin-policy.md`](docs/delegated-client-admin-policy.md), and [`docs/Step_11_AdminConsole.md`](docs/Step_11_AdminConsole.md). See [`admin-console/README.md`](admin-console/README.md) for configuration and local development.
+
+Set `ADMIN_CONSOLE_CLIENT_SECRET` and `ADMIN_CONSOLE_NEXTAUTH_SECRET` to real values in `.env` before starting the stack - like Step 1, `step11-init` fails fast on placeholder values.
 
 ## Check Logs And Status
 

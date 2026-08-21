@@ -1,0 +1,42 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireRole } from "@/lib/session";
+import { config } from "@/lib/config";
+import { kcAdminRequest } from "@/lib/keycloakAdmin";
+import { errorResponse } from "@/lib/http";
+import { getOwnedRootPaths, isWithinOwnedTree } from "@/lib/ownership";
+import type { KcGroup } from "@/types/keycloak";
+
+interface RouteParams {
+  params: Promise<{ id: string; userId: string }>;
+}
+
+export async function DELETE(_req: NextRequest, { params }: RouteParams) {
+  const auth = await requireRole(config.delegatedClientAdminRole);
+  if (!auth.ok) return auth.response;
+
+  const { id, userId } = await params;
+
+  try {
+    const [current, ownedRootPaths] = await Promise.all([
+      kcAdminRequest<KcGroup>(auth.ctx.accessToken, `/groups/${id}`),
+      getOwnedRootPaths(auth.ctx.accessToken, auth.ctx.userId),
+    ]);
+    const group = current.data;
+    if (!group) {
+      return NextResponse.json({ error: "Group not found" }, { status: 404 });
+    }
+    if (!isWithinOwnedTree(group.path, ownedRootPaths)) {
+      return NextResponse.json(
+        { error: "You may only manage membership inside your own AppRoles subtree" },
+        { status: 403 },
+      );
+    }
+
+    await kcAdminRequest(auth.ctx.accessToken, `/users/${userId}/groups/${id}`, {
+      method: "DELETE",
+    });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}

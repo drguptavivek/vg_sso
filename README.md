@@ -109,6 +109,10 @@ This repo currently contains these custom provider modules:
 - `custom-failure-logs-event-listener-spi`
 - `custom-user-onboarding-email-spi`
 
+## Admin console app
+
+[`admin-console/`](admin-console/README.md) is a standalone Next.js app (separate `docker-compose.yml` service) giving `user-manager` and `delegated-client-admin-base` holders a curated self-service UI instead of the full Keycloak admin console: an `/hr` dashboard for user lifecycle operations, and a `/groups` dashboard for delegated client admins to manage their own `AppRoles/{clientId}` subtree. It introduces no new authorization surface - every action goes through Keycloak's own Admin REST API with the signed-in user's own access token, so it is bound by the same FGAP v2 permissions and delegated-admin-guard enforcement documented in [`docs/`](docs/). See [`docs/Step_11_AdminConsole.md`](docs/Step_11_AdminConsole.md).
+
 ## Prerequisites
 
 For the standard local workflow, install these tools first:
