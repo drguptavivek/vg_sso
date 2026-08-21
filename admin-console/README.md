@@ -57,6 +57,28 @@ This is an admin surface (user creation, password resets, group membership) and 
 
 See [`nginx-confs/hr-admin-console.conf`](../nginx-confs/hr-admin-console.conf) for a proposed vhost for the separate-host/LAN-proxy shape (placeholders: hostname, this VM's ingress IP, TLS cert paths).
 
+### Firewall rule (ufw): important Docker gotcha
+
+`ADMIN_CONSOLE_PORT` is published by Docker via a `-p` port mapping (that's what the `ports:` entry in `docker-compose.yml` does). Docker manages that by inserting its own iptables rules directly into the `DOCKER-USER`/`DOCKER` chains, and those rules are evaluated **before** ufw's normal `INPUT` chain. A plain `ufw allow from <ip> to any port ...` / `ufw deny <port>/tcp` pair looks correct but **does not actually restrict a docker-published port** - traffic still gets through, because it never reaches the ufw rule that would have blocked it. This is a well-known ufw+Docker interaction, not specific to this app.
+
+The correct way to restrict a docker-published port with ufw is to add the rule to the `DOCKER-USER` chain, which Docker guarantees always runs first. Edit `/etc/ufw/after.rules` and add this immediately before the file's final `COMMIT` line:
+
+```
+*filter
+:DOCKER-USER - [0:0]
+-A DOCKER-USER -p tcp --dport 3100 -s <LAN_NGINX_IP> -j RETURN
+-A DOCKER-USER -p tcp --dport 3100 -j DROP
+COMMIT
+```
+
+Replace `<LAN_NGINX_IP>` with the LAN reverse proxy's real source IP, and `3100` with `ADMIN_CONSOLE_PORT` if you changed it from the default. Apply with:
+
+```bash
+sudo ufw reload
+```
+
+Verify it actually took effect from a host that is *not* the LAN nginx box - a connection attempt to `<VM_IP>:3100` should time out / be refused, while the same request from the LAN nginx box's IP should succeed. Re-check after any Docker or ufw upgrade/restart, since Docker rewrites its iptables rules on every daemon restart and can reorder things relative to manually-added chains.
+
 `ADMIN_CONSOLE_APP_URL` (this app's own public URL, e.g. an internal-only subdomain) is independent of `ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL` (Keycloak's own public URL) - they can and should be different hostnames. Only `ADMIN_CONSOLE_APP_URL` needs to match the reverse-proxy hostname you choose; nothing about Keycloak's own hostname configuration changes.
 
 ## Type-checking / build
