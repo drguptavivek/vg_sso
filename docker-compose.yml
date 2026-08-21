@@ -351,11 +351,16 @@ services:
       ADMIN_CONSOLE_APP_ROLES_GROUP_NAME: AppRoles
     ports:
       # Loopback-only by default: this app is an admin surface and must not
-      # be reachable directly from the public internet. Put a reverse proxy
-      # in front of it (see nginx-confs/hr-admin-console.conf for a proposed
-      # IP-restricted vhost) rather than widening ADMIN_CONSOLE_BIND_IP.
-      # For local dev without a reverse proxy, set ADMIN_CONSOLE_BIND_IP=0.0.0.0
-      # in your own (gitignored) root .env - see .env.template.
+      # be reachable directly from the public internet. Never put it behind
+      # a public-facing reverse proxy.
+      #   - nginx co-located on this same docker host: leave the default
+      #     (127.0.0.1) and reverse-proxy to 127.0.0.1:ADMIN_CONSOLE_PORT.
+      #   - nginx running on a SEPARATE (e.g. LAN-only) host: set
+      #     ADMIN_CONSOLE_BIND_IP to this host's LAN-reachable IP in your own
+      #     (gitignored) root .env, and restrict ADMIN_CONSOLE_PORT at the
+      #     host firewall to accept connections only from that nginx host's
+      #     IP - the port binding alone is not access control in that case.
+      #     See nginx-confs/hr-admin-console.conf for a proposed vhost.
       - "${ADMIN_CONSOLE_BIND_IP:-127.0.0.1}:${ADMIN_CONSOLE_PORT:-3100}:3100"
 
   keycloak-maintenance:

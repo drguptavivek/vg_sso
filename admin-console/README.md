@@ -48,9 +48,16 @@ The app is built and run as the `admin-console` service (see `docker-compose.yml
 
 ## Exposure
 
-This is an admin surface (user creation, password resets, group membership) and must not be reachable from the public internet. `docker-compose.yml` publishes it on `127.0.0.1` only by default (`ADMIN_CONSOLE_BIND_IP` in `.env.template`) - put a reverse proxy in front of it on its own internal subdomain, IP-restricted the same way this repo already restricts Keycloak's own `/admin` paths. See [`nginx-confs/hr-admin-console.conf`](../nginx-confs/hr-admin-console.conf) for a proposed vhost (placeholders: hostname, allowed IP/CIDR, TLS cert paths).
+This is an admin surface (user creation, password resets, group membership) and must never be reachable from the public internet or from a public-facing reverse proxy.
 
-`ADMIN_CONSOLE_APP_URL` (this app's own public URL, e.g. `https://hr.example.com`) is independent of `ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL` (Keycloak's own public URL) - they can and should be different subdomains. Only `ADMIN_CONSOLE_APP_URL` needs to match the reverse-proxy hostname you choose; nothing about Keycloak's own hostname configuration changes.
+`docker-compose.yml` publishes it on `127.0.0.1` only by default (`ADMIN_CONSOLE_BIND_IP` in `.env.template`). Two deployment shapes:
+
+- **Reverse proxy on the same docker host:** leave `ADMIN_CONSOLE_BIND_IP` at its default (`127.0.0.1`) and proxy to `127.0.0.1:ADMIN_CONSOLE_PORT`.
+- **Reverse proxy on a separate host** (e.g. a LAN-only nginx that is distinct from a public/global-facing nginx): set `ADMIN_CONSOLE_BIND_IP` to the docker host's LAN-reachable IP, and restrict `ADMIN_CONSOLE_PORT` at the docker host's own firewall to accept connections only from that LAN reverse proxy's IP. The bind address by itself is not access control once it's not `127.0.0.1` - the firewall rule is what actually keeps everything else out. This app's vhost must only ever be added to the LAN-facing proxy, never the public/global one.
+
+See [`nginx-confs/hr-admin-console.conf`](../nginx-confs/hr-admin-console.conf) for a proposed vhost for the separate-host/LAN-proxy shape (placeholders: hostname, the docker host's LAN IP, TLS cert paths).
+
+`ADMIN_CONSOLE_APP_URL` (this app's own public URL, e.g. an internal-only subdomain) is independent of `ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL` (Keycloak's own public URL) - they can and should be different hostnames. Only `ADMIN_CONSOLE_APP_URL` needs to match the reverse-proxy hostname you choose; nothing about Keycloak's own hostname configuration changes.
 
 ## Type-checking / build
 
