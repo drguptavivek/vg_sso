@@ -46,6 +46,12 @@ The app listens on `http://localhost:3100` by default.
 
 The app is built and run as the `admin-console` service (see `docker-compose.yml`), depending on `step11-init`, which creates its confidential OIDC client (`ADMIN_CONSOLE_CLIENT_ID`) in the target realm. Set `ADMIN_CONSOLE_CLIENT_SECRET` and `ADMIN_CONSOLE_NEXTAUTH_SECRET` to real values in `.env` before starting the stack - `step11-init` refuses to run with placeholder values.
 
+## Exposure
+
+This is an admin surface (user creation, password resets, group membership) and must not be reachable from the public internet. `docker-compose.yml` publishes it on `127.0.0.1` only by default (`ADMIN_CONSOLE_BIND_IP` in `.env.template`) - put a reverse proxy in front of it on its own internal subdomain, IP-restricted the same way this repo already restricts Keycloak's own `/admin` paths. See [`nginx-confs/hr-admin-console.conf`](../nginx-confs/hr-admin-console.conf) for a proposed vhost (placeholders: hostname, allowed IP/CIDR, TLS cert paths).
+
+`ADMIN_CONSOLE_APP_URL` (this app's own public URL, e.g. `https://hr.example.com`) is independent of `ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL` (Keycloak's own public URL) - they can and should be different subdomains. Only `ADMIN_CONSOLE_APP_URL` needs to match the reverse-proxy hostname you choose; nothing about Keycloak's own hostname configuration changes.
+
 ## Type-checking / build
 
 ```bash

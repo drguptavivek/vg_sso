@@ -350,7 +350,13 @@ services:
       ADMIN_CONSOLE_DELEGATED_CLIENT_ADMIN_ROLE: delegated-client-admin-base
       ADMIN_CONSOLE_APP_ROLES_GROUP_NAME: AppRoles
     ports:
-      - "${ADMIN_CONSOLE_PORT:-3100}:3100"
+      # Loopback-only by default: this app is an admin surface and must not
+      # be reachable directly from the public internet. Put a reverse proxy
+      # in front of it (see nginx-confs/hr-admin-console.conf for a proposed
+      # IP-restricted vhost) rather than widening ADMIN_CONSOLE_BIND_IP.
+      # For local dev without a reverse proxy, set ADMIN_CONSOLE_BIND_IP=0.0.0.0
+      # in your own (gitignored) root .env - see .env.template.
+      - "${ADMIN_CONSOLE_BIND_IP:-127.0.0.1}:${ADMIN_CONSOLE_PORT:-3100}:3100"
 
   keycloak-maintenance:
     build:
