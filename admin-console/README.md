@@ -9,6 +9,16 @@ Standalone Next.js app providing two self-service dashboards on top of the Keycl
 
 Visiting `/` redirects to the dashboard matching the signed-in user's role, or shows a message if they hold neither role.
 
+## Screenshots
+
+Rendered with sample data (not a real realm) purely to preview the UI.
+
+| | |
+|---|---|
+| ![HR dashboard](docs/screenshots/hr-dashboard.png) HR dashboard | ![Create user](docs/screenshots/hr-create-user.png) Create user |
+| ![Reset password](docs/screenshots/hr-reset-password.png) Reset password | ![Manage groups](docs/screenshots/hr-manage-groups.png) Manage groups |
+| ![Groups dashboard](docs/screenshots/groups-dashboard.png) Client app group management | ![Group members](docs/screenshots/groups-members.png) Group members |
+
 ## Stack
 
 Next.js (App Router) + TypeScript, NextAuth v4 for OIDC login, Tailwind CSS + [shadcn/ui](https://ui.shadcn.com) (`components.json`, `src/components/ui/`) for the UI, and `sonner` for toast notifications. The `shadcn` CLI itself needs network access to `ui.shadcn.com` to add further components (`npx shadcn@latest add <component>`) - the components already present were added by hand against the same registry source, so this still works in environments where that host is reachable.
