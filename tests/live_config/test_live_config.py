@@ -347,7 +347,7 @@ class LiveConfigValidationTests(unittest.TestCase):
         employment_type = attributes["employment_type"]
         self.assertEqual(
             employment_type["validations"]["options"]["options"],
-            ["Permanent", "Contract", "Research", "Student", "Deputed", "Outsourced"],
+            ["Permanent", "Contract", "Research", "Student", "Deputed", "Outsourced", "Vendor"],
         )
 
         employee_id = attributes["employee_id"]
@@ -358,8 +358,11 @@ class LiveConfigValidationTests(unittest.TestCase):
         self.assertEqual(posts["validations"]["length"]["max"], 50)
 
         designation = attributes["designation"]
-        self.assertIn("Director", designation["validations"]["options"]["options"])
-        self.assertIn("Housekeeping Supervisor", designation["validations"]["options"]["options"])
+        expected_designations = json.loads(
+            (REPO_ROOT / "admin-console/src/config/designations.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(designation["validations"]["options"]["options"], expected_designations)
+        self.assertNotIn("required", designation)
 
         remarks = attributes["remarks"]
         self.assertTrue(remarks["multivalued"])

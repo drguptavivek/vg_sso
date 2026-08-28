@@ -5,6 +5,7 @@ import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
 import { getOwnedRootPaths, isWithinOwnedTree } from "@/lib/ownership";
 import type { KcGroup } from "@/types/keycloak";
+import { logAdminAction } from "@/lib/actionAudit";
 
 interface RouteParams {
   params: Promise<{ id: string; userId: string }>;
@@ -43,6 +44,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     await kcAdminRequest(auth.ctx.accessToken, `/users/${userId}/groups/${id}`, {
       method: "DELETE",
     });
+    await logAdminAction(auth.ctx, "user.group.remove", userId, { groupId: id, groupPath: group.path });
     return NextResponse.json({ ok: true });
   } catch (err) {
     return errorResponse(err);

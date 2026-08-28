@@ -5,6 +5,10 @@ import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
 import { adminAccessForUser, hasRealmAdminAccess, mfaCredentialTypesForUser } from "@/lib/adminAccess";
 import { USER_PROFILE_ATTRIBUTE_FIELDS, USER_PROFILE_FIELDS } from "@/lib/userProfileFields";
+import { extensionForUser, upsertUserExtension } from "@/db/userExtensions";
+import { recordAdminAction } from "@/db/actionLog";
+import { fetchHrmsEmployee } from "@/lib/hrms/client";
+import { extensionFromHrms } from "@/lib/hrms/mapping";
 import type { KcUser } from "@/types/keycloak";
 
 interface RouteParams {
@@ -18,13 +22,14 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   const { id } = await params;
 
   try {
-    const [{ data }, { data: groups }, adminAccess, mfaCredentialTypes] = await Promise.all([
+    const [{ data }, { data: groups }, adminAccess, mfaCredentialTypes, extensionData] = await Promise.all([
       kcAdminRequest<KcUser>(auth.ctx.accessToken, `/users/${id}`),
       kcAdminRequest(auth.ctx.accessToken, `/users/${id}/groups`, {
         query: { max: 1000, briefRepresentation: true },
       }),
       adminAccessForUser(auth.ctx.accessToken, id),
       mfaCredentialTypesForUser(auth.ctx.accessToken, id),
+      extensionForUser(id),
     ]);
     return NextResponse.json({
       user: data ? {
@@ -34,6 +39,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         mfaCredentialTypes,
       } : data,
       groups: groups ?? [],
+      ...extensionData,
     });
   } catch (err) {
     return errorResponse(err);
@@ -52,6 +58,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     firstName?: string;
     lastName?: string;
     attributes?: Record<string, string[]>;
+    hrmsEmployeeId?: string;
   };
 
   if (body.enabled !== undefined && typeof body.enabled !== "boolean") {
@@ -91,6 +98,15 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       if (value && field.options && !field.options.includes(value)) {
         return NextResponse.json({ error: `Invalid option for ${field.label}` }, { status: 400 });
       }
+    }
+  }
+
+  let hrms = null;
+  if (body.hrmsEmployeeId) {
+    try {
+      hrms = await fetchHrmsEmployee(body.hrmsEmployeeId.trim());
+    } catch (err) {
+      return errorResponse(err);
     }
   }
 
@@ -139,6 +155,20 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     await kcAdminRequest(auth.ctx.accessToken, `/users/${id}`, {
       method: "PUT",
       body: merged,
+    });
+
+    if (hrms) await upsertUserExtension(extensionFromHrms(id, hrms));
+    await recordAdminAction({
+      actorUserId: auth.ctx.userId,
+      actorUsername: auth.ctx.username,
+      targetUserId: id,
+      action: body.enabled === undefined ? "user.profile.update" : "user.status.update",
+      outcome: "success",
+      summary: {
+        username: merged.username,
+        hrmsAttached: Boolean(hrms),
+        fields: [...Object.keys(submittedAttributes), ...Object.keys(body).filter((key) => key !== "attributes" && key !== "hrmsEmployeeId")],
+      },
     });
 
     return NextResponse.json({ ok: true });

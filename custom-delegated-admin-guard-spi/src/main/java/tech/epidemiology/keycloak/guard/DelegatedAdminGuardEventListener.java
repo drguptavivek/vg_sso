@@ -65,7 +65,7 @@ public class DelegatedAdminGuardEventListener implements EventListenerProvider {
      */
     private static final Set<String> SYSTEM_CLIENT_IDS = Set.of(
             "admin-cli", "account", "account-console", "broker",
-            "realm-management", "security-admin-console", "admin-permissions"
+            "realm-management", "security-admin-console", "admin-permissions", "sso-self-registration"
     );
 
     private final KeycloakSession session;
@@ -258,6 +258,10 @@ public class DelegatedAdminGuardEventListener implements EventListenerProvider {
                 return;
             }
             String clientId = client.getClientId();
+            if (SYSTEM_CLIENT_IDS.contains(clientId)) {
+                LOG.infof("DELEGATED_ADMIN_GUARD: skipping AppRoles group for system client %s", clientId);
+                return;
+            }
 
             // Find AppRoles parent group
             GroupModel appRoles = session.groups().getGroupByName(realm, null, APPROLES_GROUP_NAME);

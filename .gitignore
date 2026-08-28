@@ -6,6 +6,7 @@ Archive.zip
 .kcadm.realm.config
 .env
 .env.admin-console
+.env.self-registration
 keycloak-[0-9]*/
 keycloak-*.tar.gz
 keycloak-current
@@ -35,10 +36,14 @@ theme/**/resources/icon.svg
 theme/**/resources/img/logo.png
 theme/**/resources/img/green_logo.png
 theme/**/resources/img/background.png
+theme/**/resources/img/background-*.jpg
+theme/**/resources/img/portrait.jpg
 theme/**/resources/img/favicon.ico
 theme/**/account/resources/img/logo.png
 theme/**/login/resources/img/logo.png
 theme/**/login/resources/img/background.png
+theme/**/login/resources/img/background-*.jpg
+theme/**/login/resources/img/portrait.jpg
 
 .kcadm.master.config
 .kcadm.realm.config

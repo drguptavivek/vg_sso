@@ -5,9 +5,12 @@ Standalone Next.js app providing two self-service dashboards on top of the Keycl
 ## Dashboards
 
 - `/hr` - for holders of the `user-manager` realm role: a two-pane, paginated user directory and selected profile/create/edit workspace. Its advanced filters are collapsed by default and cover expiry range, exact Employee ID, phone/account status, group membership, `/User Type` membership, and administrative access. Realm Admin, Client Manager, User Manager, and custom direct `/AppRoles/{application}` App Admin access are prominent in both directory cards and profile detail. Checkboxes drive bulk enable, disable, and onboarding resend. It also edits the configured profile fields, resets credentials, and assigns/removes existing group membership. Group creation is intentionally out of scope for this role. Profile controls are defined in `src/lib/userProfileFields.ts` and must be updated in Git when the realm schema changes. Phone verification is view-only and can become true only through user OTP validation.
+- The create and edit workspaces have a protected HRMS source pane. A manager enters an Employee ID and fetches the source record; the server-side, version-controlled mapper proposes an editable Keycloak draft in the other pane. Nothing is written until the manager submits the normal create/save action, which re-fetches HRMS server-side rather than trusting browser-supplied source data. The retained extension record stores the HRMS Employee ID, date of birth, parent names, and final five PAN characters; unrelated HRMS payroll and demographic fields are discarded.
 - `/groups` - a full-width, three-workspace Groups dashboard. Its group workspaces use live-filtered columns for parent groups/applications, recursively nested child groups/roles, and direct members. The member column includes the selected group's full breadcrumb. `user-manager` and realm admins can browse institute-wide groups, inspect all application roles, and audit a user's memberships. `user-manager` can manage memberships but not application-role structure.
 - Delegated administrators see only owned `AppRoles/{clientId}` applications. Each application-role card shows its direct-member count and opens the exact user list, so delegates can see and manage which users hold which roles in their own applications. Institute-wide groups and user audit are not exposed to delegates.
 - Holders of `realm-management -> realm-admin` have full access to both dashboards and all application roots.
+- `/register` - an unauthenticated but LAN-only EHRMS self-registration page. It shows masked EHRMS contacts, performs server-side duplicate checks, and creates the account through a separate restricted Keycloak service client. See [`docs/SelfRegistration.md`](../docs/SelfRegistration.md).
+- `/audit` - available only to `realm-management -> realm-admin`. It shows a filterable, paginated log of mutations made through this application. Entries contain actor and target Keycloak UUIDs, action, outcome, and a redacted summary; passwords, tokens, full PAN values, and complete HRMS responses are never logged.
 
 Visiting `/` redirects realm administrators to `/hr`; other users are routed to the dashboard matching their application role or shown a missing-role message.
 
@@ -42,6 +45,19 @@ Two Keycloak URLs are configured separately to support running inside docker com
 
 - `ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL` - reachable from the end user's browser (OIDC login/logout redirects).
 - `ADMIN_CONSOLE_KEYCLOAK_INTERNAL_URL` - reachable from this app's server process (token exchange + all Admin REST calls). Inside docker compose this is the internal service address `http://keycloak:8080`.
+
+### Admin application database
+
+The app uses a separate `sso_admin` database on the same PostgreSQL server. Keycloak's database remains private to Keycloak. Drizzle owns the committed schema and migrations under `drizzle/`; production containers apply them before the app starts.
+
+```bash
+make admin-console-db-provision
+make admin-console-db-migrate
+```
+
+Set `ADMIN_CONSOLE_DB_NAME`, `ADMIN_CONSOLE_DB_USER`, `ADMIN_CONSOLE_DB_PASSWORD`, and `ADMIN_CONSOLE_DATABASE_URL` in the gitignored `.env.admin-console`. Use `npm run db:generate` after intentional schema changes and commit the TypeScript schema and generated SQL.
+
+The database is not a Keycloak profile copy. It stores only app-owned extension data, additional contact identifiers, and the mutation audit log. The Keycloak user UUID remains the authoritative identity key.
 
 ## Local development
 

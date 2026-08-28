@@ -5,6 +5,7 @@ import { authOptions } from "./auth";
 export interface AuthorizedContext {
   accessToken: string;
   userId: string;
+  username: string;
   roles: string[];
   isRealmAdmin: boolean;
 }
@@ -56,8 +57,32 @@ export async function requireAnyRole(roles: string[]): Promise<RequireRoleResult
     ctx: {
       accessToken: session.accessToken,
       userId: session.userId ?? "",
+      username: session.user?.username ?? session.user?.name ?? "",
       roles: session.roles,
       isRealmAdmin: session.isRealmAdmin,
+    },
+  };
+}
+
+export async function requireRealmAdmin(): Promise<RequireRoleResult> {
+  const session = await getServerSession(authOptions);
+  if (!session?.accessToken) {
+    return { ok: false, response: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };
+  }
+  if (session.error === "RefreshAccessTokenError") {
+    return { ok: false, response: NextResponse.json({ error: "Session expired, please sign in again" }, { status: 401 }) };
+  }
+  if (session.isRealmAdmin !== true) {
+    return { ok: false, response: NextResponse.json({ error: "Realm administrator access is required" }, { status: 403 }) };
+  }
+  return {
+    ok: true,
+    ctx: {
+      accessToken: session.accessToken,
+      userId: session.userId ?? "",
+      username: session.user?.username ?? session.user?.name ?? "",
+      roles: session.roles,
+      isRealmAdmin: true,
     },
   };
 }

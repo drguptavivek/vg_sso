@@ -3,18 +3,21 @@ SHELL := /bin/bash
 COMPOSE := docker compose -f docker-compose.yml -f docker-compose.override.yml
 COMPOSE_PROD := docker compose -f docker-compose.yml
 ADMIN_CONSOLE_ENV_FILE ?= .env.admin-console
-ADMIN_CONSOLE_COMPOSE := docker compose --env-file .env --env-file $(ADMIN_CONSOLE_ENV_FILE) -f docker-compose.yml -f docker-compose.override.yml --profile admin-console
+SELF_REGISTRATION_ENV_FILE ?= .env.self-registration
+SELF_REGISTRATION_ENV_ARG := $(if $(wildcard $(SELF_REGISTRATION_ENV_FILE)),--env-file $(SELF_REGISTRATION_ENV_FILE),)
+ADMIN_CONSOLE_COMPOSE := docker compose --env-file .env --env-file $(ADMIN_CONSOLE_ENV_FILE) $(SELF_REGISTRATION_ENV_ARG) -f docker-compose.yml -f docker-compose.override.yml --profile admin-console
 COMPOSE_UPGRADE_TEST := docker compose -p vg_sso_upgrade_test -f docker-compose.upgrade-test.yml
 UPGRADE_TEST_VERSION ?= 26.7.2
 UPGRADE_TEST_IMAGE ?= vg_sso-keycloak-upgrade-test:$(UPGRADE_TEST_VERSION)
 UPGRADE_TEST_KEYCLOAK_IMAGE ?= quay.io/keycloak/keycloak:$(UPGRADE_TEST_VERSION)
 SPI_MVN_ARGS ?=
 
-.PHONY: help apply-branding build-spis dev-up dev-reload-spi up down reset ps logs kcadm-login \
+.PHONY: help self-registration-client-setup self-registration-client-secret-rotate apply-branding sync-designations build-spis dev-up dev-reload-spi up down reset ps logs kcadm-login \
 	logs-all \
 	logs-runtime logs-init \
 	force-step1 force-step2 force-step3 force-step4 force-step5 force-step6 force-step7 force-step7-fgap force-step8 force-step9 force-step10 maintenance audit-export backup full-backup \
-	admin-console-build admin-console-up admin-console-stop admin-console-logs \
+	admin-console-build admin-console-db-provision admin-console-db-migrate \
+	admin-console-up admin-console-stop admin-console-logs \
 	test-config test-step6 test-step7 \
 	upgrade-test-build upgrade-test-db-copy upgrade-test-up upgrade-test-logs upgrade-test-version upgrade-test-down upgrade-test-reset
 
@@ -23,6 +26,7 @@ help:
 	@echo "  make dev-up           Hot-reload all SPIs, then start full dev stack"
 	@echo "  make build-spis       Build all SPI provider JARs on host"
 	@echo "  make apply-branding   Apply local branding assets from .local/brand-assets"
+	@echo "  make sync-designations Normalize .local/masters/designations.txt into tracked profile options"
 	@echo "  make dev-reload-spi   Build/copy all SPI JARs into running Keycloak and restart"
 	@echo "  make up               Start full dev stack (docker compose override)"
 	@echo "  make down             Stop dev stack"
@@ -33,6 +37,8 @@ help:
 	@echo "  make logs-runtime     Tail last 200 lines for keycloak + postgres"
 	@echo "  make logs-init        Tail last 200 lines for step init containers"
 	@echo "  make kcadm-login      Login kcadm in vg-keycloak using KC_MASTER_ADMIN_USER from .env"
+	@echo "  make self-registration-client-setup Configure the restricted Keycloak registration service client"
+	@echo "  make self-registration-client-secret-rotate Explicitly rotate and save the registration client secret"
 	@echo "  make force-step1      Re-run step1-init"
 	@echo "  make force-step2      Re-run step2-init"
 	@echo "  make force-step3      Re-run step3-init"
@@ -46,6 +52,8 @@ help:
 	@echo "  make force-step10     Re-run step10-init (user onboarding mail setup)"
 	@echo "    First: cp .env.admin-console.template .env.admin-console and set real values"
 	@echo "  make admin-console-build Build optional admin-console images"
+	@echo "  make admin-console-db-provision Create/update the separate sso_admin database and role"
+	@echo "  make admin-console-db-migrate Apply committed Drizzle migrations"
 	@echo "  make admin-console-up    Start the optional Next.js service"
 	@echo "  make admin-console-stop  Stop the optional Next.js service"
 	@echo "  make admin-console-logs  Tail optional admin-console logs"
@@ -66,6 +74,9 @@ help:
 
 apply-branding:
 	./scripts/apply_local_brand_assets.sh
+
+sync-designations:
+	./scripts/sync_designations.sh
 
 build-spis:
 	mvn -q -f custom-group-attr-mapper/pom.xml $(SPI_MVN_ARGS) -DskipTests package
@@ -126,6 +137,12 @@ logs-init:
 kcadm-login:
 	@bash -lc 'set -euo pipefail; get_env() { grep -m1 "^$$1=" .env | cut -d= -f2-; }; server="$${KEYCLOAK_URL:-http://localhost:8080}"; realm="$${ADMIN_REALM:-master}"; user="$${ADMIN_USER:-$$(get_env KC_MASTER_ADMIN_USER)}"; password="$${ADMIN_PASSWORD:-$$(get_env KC_MASTER_ADMIN_PASSWORD)}"; config="$${KCADM_CONFIG:-/tmp/kcadm-master-admin.config}"; container="$${CONTAINER_NAME:-vg-keycloak}"; if [[ -z "$$user" || -z "$$password" ]]; then echo "ERROR: KC_MASTER_ADMIN_USER/KC_MASTER_ADMIN_PASSWORD missing in .env or ADMIN_USER/ADMIN_PASSWORD env" >&2; exit 1; fi; docker exec "$$container" /opt/keycloak/bin/kcadm.sh config credentials --server "$$server" --realm "$$realm" --user "$$user" --password "$$password" --config "$$config"; echo "kcadm config: $$config"'
 
+self-registration-client-setup: kcadm-login
+	./scripts/setup_self_registration_client.sh
+
+self-registration-client-secret-rotate: kcadm-login
+	SELF_REGISTRATION_ROTATE_SECRET=true ./scripts/setup_self_registration_client.sh
+
 force-step1:
 	$(COMPOSE) run --rm -e STEP1_FORCE=true step1-init
 
@@ -160,10 +177,17 @@ force-step10:
 	$(COMPOSE) run --rm -e STEP10_FORCE=true step10-init
 
 admin-console-build:
-	$(ADMIN_CONSOLE_COMPOSE) build admin-console
+	$(ADMIN_CONSOLE_COMPOSE) build admin-console-migrate admin-console
+
+admin-console-db-provision:
+	$(ADMIN_CONSOLE_COMPOSE) run --rm admin-console-db-init
+
+admin-console-db-migrate:
+	$(ADMIN_CONSOLE_COMPOSE) build admin-console-migrate
+	$(ADMIN_CONSOLE_COMPOSE) run --rm admin-console-migrate
 
 admin-console-up:
-	$(ADMIN_CONSOLE_COMPOSE) up -d --no-deps admin-console
+	$(ADMIN_CONSOLE_COMPOSE) up -d admin-console
 
 admin-console-stop:
 	$(ADMIN_CONSOLE_COMPOSE) stop admin-console

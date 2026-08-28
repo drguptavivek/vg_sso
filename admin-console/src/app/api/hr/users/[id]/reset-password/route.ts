@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
+import { logAdminAction } from "@/lib/actionAudit";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       method: "PUT",
       body: { type: "password", value: password, temporary },
     });
+    await logAdminAction(auth.ctx, "user.password.reset", id, { temporary, generated });
 
     return NextResponse.json({
       ok: true,

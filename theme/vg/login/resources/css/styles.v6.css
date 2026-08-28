@@ -1,0 +1,349 @@
+:root {
+  --vg-overlay: rgba(0, 0, 0, 0);
+  --vg-card-bg: rgba(255, 255, 255, 0.58);
+  --vg-primary: #005ea8;
+  --vg-primary-hover: #004b86;
+  --vg-focus-ring: rgba(0, 94, 168, 0.18);
+  --vg-focus-border: rgba(0, 94, 168, 0.7);
+  --vg-hover-shadow: rgba(0, 75, 134, 0.24);
+}
+
+:root[data-login-context="admin-console"] {
+  --vg-primary: #0b6e4f;
+  --vg-primary-hover: #08563e;
+  --vg-focus-ring: rgba(11, 110, 79, 0.18);
+  --vg-focus-border: rgba(11, 110, 79, 0.7);
+  --vg-hover-shadow: rgba(8, 86, 62, 0.24);
+}
+
+html,
+body,
+.login-pf,
+.login-pf-page,
+body.login-pf {
+  min-height: 100%;
+  border-radius: 0 !important;
+}
+
+body,
+.login-pf,
+.login-pf-page,
+body.login-pf {
+  margin: 0;
+  background-color: #163027;
+  background-image: linear-gradient(var(--vg-overlay), var(--vg-overlay)),
+    url("../img/background.png");
+  background-image: linear-gradient(var(--vg-overlay), var(--vg-overlay)),
+    url("../img/portrait.jpg?v=20260828-2");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+@media (min-width: 768px) {
+  body,
+  .login-pf,
+  .login-pf-page,
+  body.login-pf {
+    background-image: linear-gradient(var(--vg-overlay), var(--vg-overlay)),
+      image-set(
+        url("../img/background-desktop-1280.jpg") type("image/jpeg") 1x,
+        url("../img/background-desktop-2560.jpg") type("image/jpeg") 2x
+      );
+  }
+}
+
+@media (min-width: 1600px) {
+  body,
+  .login-pf,
+  .login-pf-page,
+  body.login-pf {
+    background-image: linear-gradient(var(--vg-overlay), var(--vg-overlay)),
+      image-set(
+        url("../img/background-desktop-1920.jpg") type("image/jpeg") 1x,
+        url("../img/background-desktop-3204.jpg") type("image/jpeg") 2x
+      );
+  }
+}
+
+#kc-header-wrapper {
+  font-size: 0;
+  line-height: 0;
+}
+
+#kc-header-wrapper::before {
+  content: "";
+  display: block;
+  width: 220px;
+  height: 74px;
+  margin: 0 auto 16px;
+  background: url("../img/logo.png") center/contain no-repeat;
+}
+
+#kc-page-title {
+  color: #102a43;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+
+.login-pf-page .card-pf,
+.card-pf {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 12px;
+  background: var(--vg-card-bg);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  color: #102a43;
+}
+
+body[data-page-id*="update-password"] .card-pf,
+body[data-page-id*="config-totp"] .card-pf,
+body[data-page-id*="recovery-authn-code"] .card-pf {
+  background: rgba(255, 255, 255, 0.76);
+}
+
+/* Keep long required-action pages readable over every part of the photo. */
+#kc-content,
+#kc-content-wrapper,
+#kc-form,
+#kc-form-wrapper,
+#kc-info-wrapper,
+.instruction,
+.subtitle,
+#kc-totp-settings,
+#kc-totp-settings p,
+#kc-totp-settings li {
+  color: #102a43;
+}
+
+#mode-manual,
+#mode-barcode {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 10px 14px;
+  border: 2px solid var(--vg-primary);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--vg-primary);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+#mode-manual:hover,
+#mode-barcode:hover,
+#mode-manual:focus,
+#mode-barcode:focus {
+  background: var(--vg-primary);
+  color: #fff;
+  text-decoration: none;
+}
+
+#kc-totp-secret-key {
+  display: inline-block;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #eef5f2;
+  color: #102a43;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  overflow-wrap: anywhere;
+}
+
+.kc-recovery-codes-warning,
+#kc-recovery-codes-list,
+.kc-recovery-codes-actions,
+#kcRecoveryCodesConfirmationCheck + label {
+  color: #102a43;
+}
+
+.kc-recovery-codes-warning {
+  background: #fff7d6;
+  border: 1px solid #b7791f;
+}
+
+.kc-recovery-codes-warning .pf-c-alert__title,
+.kc-recovery-codes-warning .pf-c-alert__description,
+.kc-recovery-codes-warning p {
+  color: #5f370e;
+  font-size: 1.02rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+#kc-recovery-codes-list {
+  padding: 18px 18px 18px 48px;
+  border: 1px solid #a9bdb5;
+  border-radius: 10px;
+  background: rgba(247, 250, 249, 0.98);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.65;
+}
+
+#kcRecoveryCodesConfirmationCheck {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+#kcRecoveryCodesConfirmationCheck + label {
+  font-size: 1.1rem;
+  font-weight: 750;
+  line-height: 1.45;
+  vertical-align: middle;
+}
+
+.vg-password-requirements {
+  margin: 0 0 20px;
+  padding: 16px 18px;
+  border: 1px solid #a9bdb5;
+  border-radius: 10px;
+  background: rgba(238, 245, 242, 0.98);
+  color: #102a43;
+}
+
+.vg-password-requirements h2 {
+  margin: 0 0 8px;
+  color: #102a43;
+  font-size: 1.12rem;
+  font-weight: 750;
+}
+
+.vg-password-requirements ul {
+  margin: 0;
+  padding-left: 22px;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.pf-c-form__label-text,
+label[for="username"],
+label[for="password"] {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #0f2743;
+}
+
+.pf-c-form-control,
+#username,
+#password {
+  min-height: 52px;
+  font-size: 1.08rem;
+  line-height: 1.4;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 39, 67, 0.25);
+}
+
+.pf-c-form-control:focus,
+#username:focus,
+#password:focus {
+  border-color: var(--vg-focus-border);
+  box-shadow: 0 0 0 3px var(--vg-focus-ring);
+}
+
+.pf-c-button.pf-m-primary,
+#kc-login {
+  background-color: var(--vg-primary);
+  border-color: var(--vg-primary);
+  min-height: 50px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: background-color 160ms ease, border-color 160ms ease,
+    transform 160ms ease, box-shadow 160ms ease;
+}
+
+.pf-c-button.pf-m-primary:hover,
+#kc-login:hover {
+  background-color: var(--vg-primary-hover);
+  border-color: var(--vg-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px var(--vg-hover-shadow);
+}
+
+.pf-c-alert.pf-m-danger,
+.alert-error,
+#input-error {
+  background: rgba(177, 18, 38, 0.14);
+  border: 1px solid rgba(177, 18, 38, 0.45);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  position: static !important;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pf-c-alert.pf-m-danger .pf-c-alert__title,
+.alert-error .kc-feedback-text,
+#input-error,
+.kc-feedback-text {
+  color: #7a1022;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+#kc-form-login .pf-c-form__helper-text,
+#kc-form-login .pf-c-form__helper-text.pf-m-error {
+  position: static !important;
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 16px;
+}
+
+#kc-form-login .pf-c-form__group {
+  margin-bottom: 14px;
+}
+
+.login-pf-settings a,
+#kc-form-options a {
+  color: var(--vg-primary-hover);
+  font-size: 1.02rem;
+  font-weight: 750;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.login-pf-settings a:hover,
+#kc-form-options a:hover {
+  color: #102a43;
+}
+
+.login-pf-settings a:focus-visible,
+#kc-form-options a:focus-visible {
+  border-radius: 4px;
+  outline: 3px solid var(--vg-focus-border);
+  outline-offset: 3px;
+}
+
+.vg-admin-login-note {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--vg-primary);
+}
+
+@media (max-width: 768px) {
+  #kc-header-wrapper::before {
+    width: 170px;
+    height: 58px;
+  }
+
+  .login-pf {
+    background-attachment: scroll;
+  }
+}

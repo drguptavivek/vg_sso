@@ -28,6 +28,8 @@ export interface CreateUserRequest {
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;
+  attributes?: Record<string, string[]>;
+  hrmsEmployeeId?: string;
   groupPaths?: string[];
   sendOnboarding?: boolean;
 }

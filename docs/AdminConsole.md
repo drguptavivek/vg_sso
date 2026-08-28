@@ -3,6 +3,7 @@
 `admin-console/` is a standalone Next.js application providing curated administration workflows without exposing the full Keycloak Admin Console. It runs only under the optional `admin-console` Compose profile.
 
 There is no automated initializer. Create and maintain its confidential OIDC client manually in the Keycloak UI so administrator passwords and MFA are never used by unattended scripts.
+The optional LAN-only EHRMS self-registration module is documented in [`SelfRegistration.md`](SelfRegistration.md). It uses a separate generated service client; it does not change the manually maintained interactive OIDC client.
 
 ## Access and capabilities
 

@@ -54,30 +54,26 @@ http://localhost:8080/admin/$REALM/console/
 ## USER PROFILE SCHEMA
 Added fields in `org-new-delhi` user profile:
 1. `phone_number`  User/admin can view, only admin can edit; max 20 chars; must match `+` optional and 10–15 digits.
-2. `employment_type`  Single-select dropdown: `Permanent`, `Contract`, `Research`, `Student`, `Deputed`, `Outsourced`; user/admin view, admin edit only.
+2. `employment_type`  Single-select dropdown: `Permanent`, `Contract`, `Research`, `Student`, `Deputed`, `Outsourced`, `Vendor`; user/admin view, admin edit only.
 3. `employee_id`  Single text field; max 32 chars; user/admin view, admin edit only.
 4. `posts` Multi-valued text field (multiple entries allowed); each value max 50 chars; user/admin view, admin edit only.
-5. `designation`  Single-select dropdown with your ~60 designation options; user/admin view, admin edit only.
+5. `designation` Optional single-select dropdown sourced from `admin-console/src/config/designations.json`; user/admin view, admin edit only. An empty designation is stored by omitting the attribute.
 6. `remarks`  Multi-valued free-text textarea field; each value max 1000 chars; user/admin view, admin edit only.
 
 > Note: Account Expiry Date is not part of Step 2. It is added later during Step 5 account expiry setup.
 
 
+The tracked designation list is shared by Step 2 and the Next.js admin console. The local text file is only an input master; normalize it into the tracked JSON after editing it:
+
 ```bash
-# Export current user-profile config to a temp file so we can patch it safely.
-rm ./tmp/vg-user-profile.json 
-rm ./tmp/vg-user-profile.new.json
-./kcadm.sh get users/profile -r org-new-delhi --config .kcadm.config > ./tmp/vg-user-profile.json
-
-# Add/replace custom attributes: phone_number, employment_type, employee_id, posts (multivalued), designation (dropdown options).
-jq 'def upsert(a): .attributes=((.attributes//[])|map(select(.name!=a.name))+[a]); upsert({"name":"phone_number","displayName":"Phone Number","permissions":{"view":["user","admin"],"edit":["admin"]},"validations":{"length":{"max":20},"pattern":{"pattern":"^\\+?[0-9]{10,15}$","error-message":"Invalid phone number"}}}) | upsert({"name":"employment_type","displayName":"Type","permissions":{"view":["user","admin"],"edit":["admin"]},"validations":{"options":{"options":["Permanent","Contract","Research","Student","Deputed","Outsourced"]}}}) | upsert({"name":"employee_id","displayName":"Employee ID","permissions":{"view":["user","admin"],"edit":["admin"]},"validations":{"length":{"max":32}}}) | upsert({"name":"posts","displayName":"Posts","multivalued":true,"permissions":{"view":["user","admin"],"edit":["admin"]},"validations":{"length":{"max":50}}}) | upsert({"name":"designation","displayName":"Designation","permissions":{"view":["user","admin"],"edit":["admin"]},"validations":{"options":{"options":["Director","Dean","Medical Superintendent","Professor","Additional Professor","Associate Professor","Assistant Professor","Senior Resident","Junior Resident","Chief Medical Officer","Medical Officer","Consultant","Specialist","Registrar","Demonstrator","Tutor","Scientist I","Scientist II","Scientist III","Scientist IV","Scientist V","Lab Technician","Senior Lab Technician","Junior Lab Technician","Research Associate","Research Fellow","Project Scientist","Project Assistant","Project Technician","Data Manager","Biostatistician","Epidemiologist","Clinical Psychologist","Physiotherapist","Occupational Therapist","Speech Therapist","Dietician","Pharmacist","Senior Pharmacist","Store Officer","Administrative Officer","Section Officer","Accounts Officer","Finance Officer","HR Officer","IT Officer","System Analyst","Network Engineer","Security Officer","Public Relations Officer","Legal Officer","Warden","Matron","Nursing Superintendent","Deputy Nursing Superintendent","Assistant Nursing Superintendent","Staff Nurse","ANM","Driver","Attendant","Housekeeping Supervisor"]}}}) | upsert({"name":"remarks","displayName":"Remarks","multivalued":true,"permissions":{"view":["user","admin"],"edit":["admin"]},"validations":{"length":{"max":1000}},"annotations":{"inputType":"textarea","inputTypeRows":"4","inputTypeCols":"60"}})' ./tmp/vg-user-profile.json > ./tmp/vg-user-profile.new.json
-
-# Apply the updated user-profile schema to the org-new-delhi realm.
-./kcadm.sh update users/profile -r org-new-delhi -f ./tmp/vg-user-profile.new.json --config .kcadm.config
-
-# Verify only the newly added custom attributes are present in realm user-profile config.
-./kcadm.sh get users/profile -r org-new-delhi --config .kcadm.config | jq '.attributes[] | select(.name=="phone_number" or .name=="employment_type" or .name=="employee_id" or .name=="posts" or .name=="designation"or .name=="remarks)'
+make sync-designations
 ```
+
+The sync command trims whitespace, removes blank lines, and removes exact duplicates while preserving order. Empty designation is intentionally not an option: because `designation` has no `required` rule, users may leave it unset.
+
+On a fresh build, the canonical JSON is packaged into the Keycloak image. In the development Compose setup, Step 2 reads it from `/workspace/admin-console/src/config/designations.json`. Step 2 validates the list and injects it into the full user-profile payload before updating Keycloak.
+
+Do not force Step 2 merely to refresh this list when the configured realm administrator uses MFA. Instead, fetch the existing `users/profile` document with a master-admin `kcadm` session, replace only the designation options, and update the document. This preserves all other profile fields.
 
 
 ## USER Mangement Role

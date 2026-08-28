@@ -1,3 +1,5 @@
+import DESIGNATIONS from "@/config/designations.json";
+
 export type UserProfileControl = "text" | "email" | "select" | "textarea" | "date" | "timezone";
 
 export interface UserProfileField {
@@ -15,22 +17,6 @@ export interface UserProfileField {
   placeholder?: string;
 }
 
-const DESIGNATIONS = [
-  "Director", "Dean", "Medical Superintendent", "Professor", "Additional Professor",
-  "Associate Professor", "Assistant Professor", "Senior Resident", "Junior Resident",
-  "Chief Medical Officer", "Medical Officer", "Consultant", "Specialist", "Registrar",
-  "Demonstrator", "Tutor", "Scientist I", "Scientist II", "Scientist III", "Scientist IV",
-  "Scientist V", "Lab Technician", "Senior Lab Technician", "Junior Lab Technician",
-  "Research Associate", "Research Fellow", "Project Scientist", "Project Assistant",
-  "Project Technician", "Data Manager", "Biostatistician", "Epidemiologist",
-  "Clinical Psychologist", "Physiotherapist", "Occupational Therapist", "Speech Therapist",
-  "Dietician", "Pharmacist", "Senior Pharmacist", "Store Officer", "Administrative Officer",
-  "Section Officer", "Accounts Officer", "Finance Officer", "HR Officer", "IT Officer",
-  "System Analyst", "Network Engineer", "Security Officer", "Public Relations Officer",
-  "Legal Officer", "Warden", "Matron", "Nursing Superintendent",
-  "Deputy Nursing Superintendent", "Assistant Nursing Superintendent", "Staff Nurse", "ANM",
-  "Driver", "Attendant", "Housekeeping Supervisor",
-] as const;
 
 export const USER_PROFILE_FIELDS: readonly UserProfileField[] = [
   { name: "username", label: "Username", source: "core", control: "text", required: true, maxLength: 255 },
@@ -60,7 +46,7 @@ export const USER_PROFILE_FIELDS: readonly UserProfileField[] = [
     label: "Employment type",
     source: "attribute",
     control: "select",
-    options: ["Permanent", "Contract", "Research", "Student", "Deputed", "Outsourced"],
+    options: ["Permanent", "Contract", "Research", "Student", "Deputed", "Outsourced", "Vendor"],
   },
   { name: "employee_id", label: "Employee ID", source: "attribute", control: "text", maxLength: 32 },
   {

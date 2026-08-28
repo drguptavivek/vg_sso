@@ -810,7 +810,7 @@ def evaluate_controls(context: dict) -> list[ControlResult]:
             "user-profile",
             "low",
             "PASS"
-            if employment_options == ["Permanent", "Contract", "Research", "Student", "Deputed", "Outsourced"]
+            if employment_options == ["Permanent", "Contract", "Research", "Student", "Deputed", "Outsourced", "Vendor"]
             else "FAIL",
             "employment_type options baseline applied",
             f"options={employment_options}",

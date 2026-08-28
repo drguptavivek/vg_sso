@@ -307,6 +307,36 @@ services:
       - keycloak_data:/opt/keycloak/data
     entrypoint: [ "/bin/bash", "/opt/keycloak/scripts/step10_user_onboarding_setup.sh" ]
 
+  admin-console-db-init:
+    profiles: [ "admin-console" ]
+    image: postgres:16
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      ADMIN_CONSOLE_DB_NAME: ${ADMIN_CONSOLE_DB_NAME:-sso_admin}
+      ADMIN_CONSOLE_DB_USER: ${ADMIN_CONSOLE_DB_USER:-sso_admin_app}
+      ADMIN_CONSOLE_DB_PASSWORD: ${ADMIN_CONSOLE_DB_PASSWORD:-}
+    volumes:
+      - ./scripts/admin_console_db_init.sh:/usr/local/bin/admin-console-db-init:ro
+    entrypoint: [ "/bin/bash", "/usr/local/bin/admin-console-db-init" ]
+
+  admin-console-migrate:
+    profiles: [ "admin-console" ]
+    build:
+      context: ./admin-console
+      dockerfile: Dockerfile
+      target: migration
+    restart: "no"
+    depends_on:
+      admin-console-db-init:
+        condition: service_completed_successfully
+    environment:
+      ADMIN_CONSOLE_DATABASE_URL: ${ADMIN_CONSOLE_DATABASE_URL:-}
+
   admin-console:
     profiles: [ "admin-console" ]
     build:
@@ -315,9 +345,12 @@ services:
     container_name: vg-admin-console
     restart: unless-stopped
     depends_on:
+      admin-console-migrate:
+        condition: service_completed_successfully
       keycloak:
         condition: service_healthy
     environment:
+      ADMIN_CONSOLE_DATABASE_URL: ${ADMIN_CONSOLE_DATABASE_URL:-}
       KC_NEW_REALM_NAME: ${KC_NEW_REALM_NAME}
       ADMIN_CONSOLE_CLIENT_ID: ${ADMIN_CONSOLE_CLIENT_ID:-hr-client-admin-console}
       ADMIN_CONSOLE_CLIENT_SECRET: ${ADMIN_CONSOLE_CLIENT_SECRET:-}
@@ -328,6 +361,16 @@ services:
       ADMIN_CONSOLE_USER_MANAGER_ROLE: user-manager
       ADMIN_CONSOLE_DELEGATED_CLIENT_ADMIN_ROLE: delegated-client-admin-base
       ADMIN_CONSOLE_APP_ROLES_GROUP_NAME: AppRoles
+      HRMS_API_URL: ${HRMS_API_URL:-}
+      HRMS_API_TOKEN: ${HRMS_API_TOKEN:-}
+      HRMS_API_ROLE: ${HRMS_API_ROLE:-user}
+      HRMS_API_TIMEOUT_MS: ${HRMS_API_TIMEOUT_MS:-10000}
+      SELF_REGISTRATION_SECRET: ${SELF_REGISTRATION_SECRET:-}
+      SELF_REGISTRATION_KEYCLOAK_CLIENT_ID: ${SELF_REGISTRATION_KEYCLOAK_CLIENT_ID:-sso-self-registration}
+      SELF_REGISTRATION_KEYCLOAK_CLIENT_SECRET: ${SELF_REGISTRATION_KEYCLOAK_CLIENT_SECRET:-}
+      SELF_REGISTRATION_TOKEN_MINUTES: ${SELF_REGISTRATION_TOKEN_MINUTES:-10}
+      SELF_REGISTRATION_IP_RATE_LIMIT: ${SELF_REGISTRATION_IP_RATE_LIMIT:-10}
+      SELF_REGISTRATION_EMPLOYEE_RATE_LIMIT: ${SELF_REGISTRATION_EMPLOYEE_RATE_LIMIT:-5}
     ports:
       # Loopback-only by default: this app is an admin surface and must not
       # be reachable directly from the public internet. Never put it behind

@@ -8,6 +8,7 @@ import {
   SlidersHorizontal, UserRound,
 } from "lucide-react";
 import type { KcGroup, KcUser } from "@/types/keycloak";
+import type { HrmsEmployeeRecord, HrmsLookupResult } from "@/types/hrms";
 import {
   USER_PROFILE_FIELDS,
   supportedTimezones,
@@ -319,6 +320,9 @@ export default function HrDashboardClient({
           <p className="text-sm text-muted-foreground">Signed in as {username}</p>
         </div>
         <div className="flex items-center gap-3">
+          {isRealmAdmin && <Button variant="outline" asChild>
+            <a href="/audit">Audit log</a>
+          </Button>}
           {showGroupsLink && (
             <Button variant="outline" asChild>
               <a href="/groups">Groups</a>
@@ -836,6 +840,8 @@ function EditProfilePanel({
 }) {
   const [detail, setDetail] = useState<KcUser | null>(null);
   const [values, setValues] = useState<Record<string, string[]>>({});
+  const [hrmsEmployeeId, setHrmsEmployeeId] = useState("");
+  const [hrmsWarnings, setHrmsWarnings] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -846,7 +852,7 @@ function EditProfilePanel({
       return;
     }
     setLoading(true);
-    void api<{ user: KcUser }>(`/api/hr/users/${user.id}`)
+    void api<{ user: KcUser; extension?: { hrmsEmployeeId?: string | null } }>(`/api/hr/users/${user.id}`)
       .then((data) => {
         setDetail(data.user);
         setValues(
@@ -854,6 +860,8 @@ function EditProfilePanel({
             USER_PROFILE_FIELDS.map((field) => [field.name, valuesForField(data.user, field)]),
           ),
         );
+        setHrmsEmployeeId(data.extension?.hrmsEmployeeId ?? data.user.attributes?.employee_id?.[0] ?? "");
+        setHrmsWarnings([]);
       })
       .catch((err) => toast.error(errMsg(err)))
       .finally(() => setLoading(false));
@@ -876,6 +884,32 @@ function EditProfilePanel({
       const next = (current[name] ?? []).filter((_, valueIndex) => valueIndex !== index);
       return { ...current, [name]: next.length > 0 ? next : [""] };
     });
+  }
+
+  function applyHrmsDraft(result: HrmsLookupResult, selectedKeys: string[]) {
+    const selected = new Set(selectedKeys);
+    setValues((current) => {
+      const next = { ...current };
+      const coreValues: Record<string, string> = {
+        email: result.draft.email,
+        firstName: result.draft.firstName,
+        lastName: result.draft.lastName,
+      };
+      for (const [name, value] of Object.entries(coreValues)) {
+        if (selected.has(name)) next[name] = [value];
+      }
+      for (const [name, value] of Object.entries(result.draft.attributes)) {
+        if (selected.has(name)) next[name] = value;
+      }
+      const remarks = [...(next.remarks ?? [])].filter(Boolean);
+      for (const proposal of hrmsRemarkProposals(result.hrms)) {
+        if (selected.has(proposal.key) && !remarks.includes(proposal.value)) remarks.push(proposal.value);
+      }
+      next.remarks = remarks.length ? remarks : [""];
+      return next;
+    });
+    setHrmsEmployeeId(result.hrms.employeeId);
+    setHrmsWarnings(result.draft.warnings);
   }
 
   async function submit() {
@@ -902,7 +936,7 @@ function EditProfilePanel({
     try {
       await api(`/api/hr/users/${detail.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ ...core, attributes }),
+        body: JSON.stringify({ ...core, attributes, hrmsEmployeeId: hrmsEmployeeId || undefined }),
       });
       toast.success(`Profile updated for ${core.username}.`);
       onUpdated();
@@ -927,17 +961,27 @@ function EditProfilePanel({
             <Loader2 className="h-4 w-4 animate-spin" /> Loading profile...
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {USER_PROFILE_FIELDS.map((field) => (
-              <ProfileFieldEditor
-                key={field.name}
-                field={field}
-                values={values[field.name] ?? [""]}
-                onChange={(index, value) => setValue(field.name, index, value)}
-                onAdd={() => addValue(field.name)}
-                onRemove={(index) => removeValue(field.name, index)}
-              />
-            ))}
+          <div className="grid gap-6 xl:grid-cols-2">
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                {USER_PROFILE_FIELDS.map((field) => <ProfileFieldEditor key={field.name} field={field}
+                  values={values[field.name] ?? [""]}
+                  onChange={(index, value) => setValue(field.name, index, value)}
+                  onAdd={() => addValue(field.name)} onRemove={(index) => removeValue(field.name, index)} />)}
+              </div>
+              {hrmsWarnings.length > 0 && <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-medium">Review unmapped HRMS values</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  {hrmsWarnings.map((warning) => <li key={warning}>{warning}</li>)}
+                </ul>
+              </div>}
+            </div>
+            <HrmsSourcePanel
+              initialEmployeeId={hrmsEmployeeId}
+              currentValues={values}
+              includeUsername={false}
+              onApply={applyHrmsDraft}
+            />
           </div>
         )}
         <DialogFooter>
@@ -1050,6 +1094,143 @@ function ProfileFieldEditor({
   );
 }
 
+const HRMS_DISPLAY_FIELDS: Array<[keyof HrmsEmployeeRecord, string]> = [
+  ["employeeId", "Employee ID"], ["name", "Name"],
+  ["fatherName", "Father’s name"], ["motherName", "Mother’s name"],
+  ["panLast5", "PAN last five"], ["dateOfBirth", "Date of birth"],
+  ["dateOfJoining", "Date of joining"], ["retirementDate", "Retirement date"],
+  ["jobCategory", "Job category"], ["designation", "Designation"],
+  ["department", "Department"], ["establishment", "Establishment"],
+  ["employeeGroup", "Employee group"], ["emailAddress", "Email"],
+  ["mobileNumber", "Mobile number"],
+];
+
+interface HrmsComparison {
+  key: string;
+  label: string;
+  currentValue: string;
+  proposedValue: string;
+}
+
+function hrmsRemarkProposals(hrms: HrmsEmployeeRecord) {
+  return [
+    { key: "remarks:department", label: "Remarks · Department", value: hrms.department ? "HRMS Department: " + hrms.department : "" },
+    { key: "remarks:establishment", label: "Remarks · Establishment", value: hrms.establishment ? "HRMS Establishment: " + hrms.establishment : "" },
+    { key: "remarks:father", label: "Remarks · Father’s name", value: hrms.fatherName ? "HRMS Father’s name: " + hrms.fatherName : "" },
+    { key: "remarks:mother", label: "Remarks · Mother’s name", value: hrms.motherName ? "HRMS Mother’s name: " + hrms.motherName : "" },
+  ].filter((proposal) => proposal.value);
+}
+
+function hrmsComparisons(result: HrmsLookupResult, currentValues: Record<string, string[]>, includeUsername: boolean): HrmsComparison[] {
+  const proposals: Array<{ key: string; label: string; value: string }> = [
+    ...(includeUsername ? [{ key: "username", label: "Username", value: result.draft.username }] : []),
+    { key: "email", label: "Email", value: result.draft.email },
+    { key: "firstName", label: "First name", value: result.draft.firstName },
+    { key: "lastName", label: "Last name", value: result.draft.lastName },
+    ...Object.entries(result.draft.attributes).map(([key, values]) => ({
+      key,
+      label: USER_PROFILE_FIELDS.find((field) => field.name === key)?.label ?? key,
+      value: values.join(", "),
+    })),
+  ].filter((proposal) => proposal.value);
+  const comparisons = proposals.map((proposal) => ({
+    key: proposal.key,
+    label: proposal.label,
+    currentValue: currentValues[proposal.key]?.filter(Boolean).join(", ") || "Empty",
+    proposedValue: proposal.value,
+  }));
+  const currentRemarks = currentValues.remarks?.filter(Boolean) ?? [];
+  for (const proposal of hrmsRemarkProposals(result.hrms)) {
+    comparisons.push({
+      key: proposal.key,
+      label: proposal.label,
+      currentValue: currentRemarks.includes(proposal.value) ? proposal.value : "Not included in remarks",
+      proposedValue: proposal.value,
+    });
+  }
+  return comparisons;
+}
+
+function HrmsSourcePanel({ initialEmployeeId = "", currentValues, includeUsername = true, onApply }: {
+  initialEmployeeId?: string;
+  currentValues: Record<string, string[]>;
+  includeUsername?: boolean;
+  onApply: (result: HrmsLookupResult, selectedKeys: string[]) => void;
+}) {
+  const [employeeId, setEmployeeId] = useState(initialEmployeeId);
+  const [result, setResult] = useState<HrmsLookupResult | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => setEmployeeId(initialEmployeeId), [initialEmployeeId]);
+  const comparisons = result ? hrmsComparisons(result, currentValues, includeUsername) : [];
+
+  async function fetchEmployee() {
+    if (!employeeId.trim()) return void toast.error("Enter an employee ID.");
+    setLoading(true);
+    try {
+      const fetched = await api<HrmsLookupResult>("/api/hr/hrms/lookup", {
+        method: "POST", body: JSON.stringify({ employeeId: employeeId.trim() }),
+      });
+      const proposed = hrmsComparisons(fetched, currentValues, includeUsername);
+      setResult(fetched);
+      setEmployeeId(fetched.hrms.employeeId);
+      setSelectedKeys(proposed.filter((item) => item.proposedValue !== item.currentValue).map((item) => item.key));
+      toast.success("HRMS details fetched. No form values were changed.");
+    } catch (error) {
+      setResult(null); setSelectedKeys([]); toast.error(errMsg(error));
+    } finally { setLoading(false); }
+  }
+
+  function toggle(key: string, checked: boolean) {
+    setSelectedKeys((current) => checked ? Array.from(new Set([...current, key])) : current.filter((item) => item !== key));
+  }
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
+      <div><h3 className="font-medium">HRMS source and proposed changes</h3>
+        <p className="text-xs text-muted-foreground">Fetching is read-only. Review current and proposed values, then explicitly apply selected changes.</p></div>
+      <div className="space-y-1.5"><Label htmlFor="hrms-employee-id">Employee ID</Label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input id="hrms-employee-id" value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") void fetchEmployee(); }} />
+          <Button type="button" variant="outline" onClick={fetchEmployee} disabled={loading}>
+            {loading && <Loader2 className="animate-spin" />} Fetch employee details
+          </Button>
+        </div>
+      </div>
+      {result ? <>
+        <div className="space-y-2">
+          <div className="hidden grid-cols-[2rem_minmax(0,.8fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 px-2 text-xs font-medium text-muted-foreground md:grid">
+            <span /><span>Field</span><span>Current value</span><span>Proposed HRMS value</span>
+          </div>
+          {comparisons.map((item) => {
+            const unchanged = item.currentValue === item.proposedValue;
+            return <div key={item.key} className="grid gap-2 rounded-md border bg-background p-2 md:grid-cols-[2rem_minmax(0,.8fr)_minmax(0,1fr)_minmax(0,1fr)]">
+              <Checkbox aria-label={"Apply proposed " + item.label} checked={selectedKeys.includes(item.key)}
+                disabled={unchanged} onCheckedChange={(checked) => toggle(item.key, checked === true)} />
+              <p className="text-sm font-medium">{item.label}</p>
+              <div><p className="text-xs text-muted-foreground md:hidden">Current</p><p className="break-words text-sm">{item.currentValue}</p></div>
+              <div><p className="text-xs text-muted-foreground md:hidden">Proposed</p><p className="break-words text-sm">{item.proposedValue}</p></div>
+            </div>;
+          })}
+        </div>
+        <Button type="button" disabled={!selectedKeys.length} onClick={() => {
+          onApply(result, selectedKeys);
+          toast.success("Selected values applied to the form. Save the form to persist them.");
+        }}>Apply selected values</Button>
+        <details className="rounded-md border bg-background p-3">
+          <summary className="cursor-pointer text-sm font-medium">View complete HRMS source record</summary>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {HRMS_DISPLAY_FIELDS.map(([name, label]) => <div key={name} className="rounded-md border p-2">
+              <p className="text-xs text-muted-foreground">{label}</p><p className="break-words text-sm">{result.hrms[name] || "Not provided"}</p>
+            </div>)}
+          </div>
+        </details>
+      </> : <p className="text-sm text-muted-foreground">Fetch an employee record to compare it with the editable Keycloak form.</p>}
+    </div>
+  );
+}
+
 function CreateUserPanel({
   onCancel,
   onCreated,
@@ -1063,6 +1244,13 @@ function CreateUserPanel({
     firstName: "",
     lastName: "",
     phoneNumber: "",
+    employeeId: "",
+    employmentType: "",
+    designation: "",
+    accountExpiryDate: "",
+    remarks: [] as string[],
+    hrmsEmployeeId: "",
+    hrmsWarnings: [] as string[],
     sendOnboarding: true,
   });
   const [groupQuery, setGroupQuery] = useState("");
@@ -1092,6 +1280,30 @@ function CreateUserPanel({
     setGroupResults([]);
   }
 
+  function applyHrmsDraft(result: HrmsLookupResult, selectedKeys: string[]) {
+    const selected = new Set(selectedKeys);
+    setForm((current) => {
+      const next = { ...current };
+      if (selected.has("username")) next.username = result.draft.username;
+      if (selected.has("email")) next.email = result.draft.email;
+      if (selected.has("firstName")) next.firstName = result.draft.firstName;
+      if (selected.has("lastName")) next.lastName = result.draft.lastName;
+      if (selected.has("phone_number")) next.phoneNumber = result.draft.attributes.phone_number?.[0] ?? "";
+      if (selected.has("employee_id")) next.employeeId = result.draft.attributes.employee_id?.[0] ?? result.hrms.employeeId;
+      if (selected.has("employment_type")) next.employmentType = result.draft.attributes.employment_type?.[0] ?? "";
+      if (selected.has("designation")) next.designation = result.draft.attributes.designation?.[0] ?? "";
+      if (selected.has("account_expiry_date")) next.accountExpiryDate = result.draft.attributes.account_expiry_date?.[0] ?? "";
+      const remarks = [...current.remarks];
+      for (const proposal of hrmsRemarkProposals(result.hrms)) {
+        if (selected.has(proposal.key) && !remarks.includes(proposal.value)) remarks.push(proposal.value);
+      }
+      next.remarks = remarks;
+      next.hrmsEmployeeId = result.hrms.employeeId;
+      next.hrmsWarnings = result.draft.warnings;
+      return next;
+    });
+  }
+
   async function submit() {
     if (!form.username.trim()) {
       toast.error("Username is required.");
@@ -1107,6 +1319,16 @@ function CreateUserPanel({
           firstName: form.firstName || undefined,
           lastName: form.lastName || undefined,
           phoneNumber: form.phoneNumber || undefined,
+          attributes: {
+            ...Object.fromEntries([
+              ["employee_id", form.employeeId],
+              ["employment_type", form.employmentType],
+              ["designation", form.designation],
+              ["account_expiry_date", form.accountExpiryDate],
+            ].filter(([, value]) => Boolean(value)).map(([name, value]) => [name, [value]])),
+            ...(form.remarks.filter(Boolean).length ? { remarks: form.remarks.filter(Boolean) } : {}),
+          },
+          hrmsEmployeeId: form.hrmsEmployeeId || undefined,
           groupPaths: selectedGroups.map((g) => g.path),
           sendOnboarding: form.sendOnboarding,
         }),
@@ -1134,7 +1356,8 @@ function CreateUserPanel({
           <CardDescription>Add a new SSO account and optionally assign existing groups.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="space-y-4">
+        <div className="grid gap-6 xl:grid-cols-2">
+          <div className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="username">Username *</Label>
             <Input id="username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
@@ -1169,6 +1392,42 @@ function CreateUserPanel({
               onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
             />
           </div>
+          <div className="space-y-1.5"><Label htmlFor="employeeId">Employee ID</Label>
+            <Input id="employeeId" value={form.employeeId}
+              onChange={(event) => setForm({ ...form, employeeId: event.target.value })} /></div>
+          <div className="space-y-1.5"><Label htmlFor="employmentType">Employment type</Label>
+            <select id="employmentType" value={form.employmentType}
+              onChange={(event) => setForm({ ...form, employmentType: event.target.value })}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+              <option value="">Select...</option>
+              {USER_PROFILE_FIELDS.find((field) => field.name === "employment_type")?.options
+                ?.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5"><Label htmlFor="designation">Designation</Label>
+            <select id="designation" value={form.designation}
+              onChange={(event) => setForm({ ...form, designation: event.target.value })}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+              <option value="">Select...</option>
+              {USER_PROFILE_FIELDS.find((field) => field.name === "designation")?.options
+                ?.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5"><Label htmlFor="accountExpiryDate">Account expiry date</Label>
+            <Input id="accountExpiryDate" type="date" value={form.accountExpiryDate}
+              onChange={(event) => setForm({ ...form, accountExpiryDate: event.target.value })} /></div>
+          <div className="space-y-1.5"><Label htmlFor="remarks">Remarks</Label>
+            <textarea id="remarks" rows={5} value={form.remarks.join("\n")}
+              onChange={(event) => setForm({ ...form, remarks: event.target.value.split("\n") })}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+            <p className="text-xs text-muted-foreground">One remark per line.</p>
+          </div>
+          {form.hrmsWarnings.length > 0 && <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-medium">Review unmapped HRMS values</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5">
+              {form.hrmsWarnings.map((warning) => <li key={warning}>{warning}</li>)}
+            </ul>
+          </div>}
           <div className="space-y-1.5">
             <Label>Add to existing groups</Label>
             <Input placeholder="Search groups..." value={groupQuery} onChange={(e) => searchGroups(e.target.value)} />
@@ -1213,6 +1472,17 @@ function CreateUserPanel({
               Send onboarding email (verify email, set password, TOTP, recovery codes)
             </Label>
           </div>
+          </div>
+          <HrmsSourcePanel
+            currentValues={{
+              username: [form.username], email: [form.email],
+              firstName: [form.firstName], lastName: [form.lastName],
+              phone_number: [form.phoneNumber], employee_id: [form.employeeId],
+              employment_type: [form.employmentType], designation: [form.designation],
+              account_expiry_date: [form.accountExpiryDate], remarks: form.remarks,
+            }}
+            onApply={applyHrmsDraft}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onCancel} disabled={submitting}>

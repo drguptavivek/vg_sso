@@ -36,6 +36,7 @@ SYSTEM_CLIENT_IDS = [
     'realm-management',
     'security-admin-console',
     'admin-permissions',
+    'sso-self-registration',
 ]
 
 def note(message):

@@ -32,6 +32,13 @@ If the asset is not found in either location, that asset is skipped.
 The script currently knows how to resolve and copy:
 
 - `background.png`
+- `portrait.jpg` for mobile screens
+- `background-desktop-1280.jpg`, `background-desktop-1920.jpg`,
+  `background-desktop-2560.jpg`, and `background-desktop-3204.jpg`
+
+The login theme uses `portrait.jpg` below 768px, then selects one responsive
+desktop JPEG according to viewport width and pixel density. The original
+`background.png` remains the compatibility fallback.
 - `green_logo.png`
 - `logo.png`
 - `logo.svg`

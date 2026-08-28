@@ -56,7 +56,7 @@ for module in "${MODULES[@]}"; do
   fi
 
   echo "DEV-HOT-RELOAD: building ${module}..."
-  mvn -q -f "${pom_file}" -DskipTests package
+  mvn -q -f "${pom_file}" -DskipTests clean package
 
   jar_path="$(find "${target_dir}" -maxdepth 1 -type f -name '*.jar' \
     ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name 'original-*.jar' \
@@ -74,6 +74,9 @@ echo "DEV-HOT-RELOAD: ensuring ${SERVICE_NAME} is running..."
 docker compose "${COMPOSE_FILES[@]}" up -d "${SERVICE_NAME}" >/dev/null
 
 for jar_path in "${JARS_TO_COPY[@]}"; do
+  module_name="$(basename "$(dirname "$(dirname "${jar_path}")")")"
+  docker exec "${CONTAINER_NAME}" find /opt/keycloak/providers -maxdepth 1 -type f \
+    -name "${module_name}-*.jar" -delete
   echo "DEV-HOT-RELOAD: copying $(basename "${jar_path}") to ${CONTAINER_NAME}:/opt/keycloak/providers/"
   docker cp "${jar_path}" "${CONTAINER_NAME}:/opt/keycloak/providers/"
 done

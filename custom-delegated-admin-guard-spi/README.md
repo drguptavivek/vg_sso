@@ -40,6 +40,7 @@ Manual admin REST mapping of `delegated-client-admin-base` is blocked by the fil
 
 ## Runtime Restrictions
 
+Version 1.2.0 adds the optional `self-registration-service` mutation allowlist used by the LAN-only Next.js EHRMS registration module. The rule is inert unless that optional realm role is assigned.
 For delegated users, the filter blocks or narrows operations that FGAP cannot safely cover by itself:
 
 - deleting clients
@@ -58,7 +59,9 @@ For local development, rebuild only this SPI and hot-swap it into the running Ke
 
 ```bash
 mvn -q -f custom-delegated-admin-guard-spi/pom.xml -DskipTests package
-docker cp custom-delegated-admin-guard-spi/target/custom-delegated-admin-guard-spi-1.0.0.jar \
+docker exec vg-keycloak find /opt/keycloak/providers -maxdepth 1 -type f \
+  -name 'custom-delegated-admin-guard-spi-*.jar' -delete
+docker cp custom-delegated-admin-guard-spi/target/custom-delegated-admin-guard-spi-1.2.0.jar \
   vg-keycloak:/opt/keycloak/providers/
 docker compose -f docker-compose.yml -f docker-compose.override.yml restart keycloak
 curl -sf http://localhost:9000/management/health/ready

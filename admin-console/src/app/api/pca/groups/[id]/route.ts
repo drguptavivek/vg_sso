@@ -5,6 +5,7 @@ import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
 import { getOwnedRootPaths, isOwnedDescendant } from "@/lib/ownership";
 import type { KcGroup } from "@/types/keycloak";
+import { logAdminAction } from "@/lib/actionAudit";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -44,6 +45,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       method: "PUT",
       body: { ...currentGroup, name: body.name.trim() },
     });
+    await logAdminAction(auth.ctx, "group.rename", undefined, { groupId: id, oldPath: currentGroup.path, newName: body.name.trim() });
     return NextResponse.json({ ok: true });
   } catch (err) {
     return errorResponse(err);
@@ -70,6 +72,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     }
 
     await kcAdminRequest(auth.ctx.accessToken, `/groups/${id}`, { method: "DELETE" });
+    await logAdminAction(auth.ctx, "group.delete", undefined, { groupId: id, groupPath: currentGroup.path });
     return NextResponse.json({ ok: true });
   } catch (err) {
     return errorResponse(err);

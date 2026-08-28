@@ -56,8 +56,14 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
 
     private static final Logger LOG = Logger.getLogger(DelegatedAdminGuardFilter.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final String SELF_REGISTRATION_SERVICE_ROLE = "self-registration-service";
 
     // PUT /admin/realms/{realm}/users/{userId}; group(1) is the target UUID.
+    // POST /admin/realms/{realm}/users (self-registration account creation).
+    private static final Pattern USER_COLLECTION_PATH = Pattern.compile(
+        "^/admin/realms/[^/]+/users/?$"
+    );
+
     private static final Pattern USER_ROOT_PATH = Pattern.compile(
         "^/admin/realms/[^/]+/users/([^/]+)$"
     );
@@ -124,7 +130,8 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
         "account-console",
         "security-admin-console",
         "admin-cli",
-        "admin-permissions"
+        "admin-permissions",
+        "sso-self-registration"
     );
 
     // KeycloakSession is pushed into the JAX-RS @Context by Keycloak's own
@@ -183,6 +190,21 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
         }
 
         UserModel actor = authResult.getUser();
+
+        // The unauthenticated LAN registration service has manage-users only because Keycloak has no
+        // create-user-only built-in role. Restrict its mutation surface here.
+        if (hasRealmRole(realm, actor, SELF_REGISTRATION_SERVICE_ROLE)) {
+            boolean mayCreate = "POST".equals(methodUpper) && USER_COLLECTION_PATH.matcher(path).matches();
+            boolean mayCompensateDelete = "DELETE".equals(methodUpper) && USER_ROOT_PATH.matcher(path).matches();
+            if (!mayCreate && !mayCompensateDelete) {
+                LOG.warnf(
+                    "DELEGATED_ADMIN_GUARD_FILTER: Blocking registration-service mutation %s path=%s realm=%s",
+                    methodUpper, path, realm.getName()
+                );
+                ctx.abortWith(forbidden("The self-registration service may only create accounts or roll back a failed creation."));
+            }
+            return;
+        }
 
         // Global safety for user disable operations. Keycloak represents
         // disable as an ordinary user update, so the broad Users/manage
@@ -431,6 +453,11 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
 
     private GroupModel getAppRolesRoot(RealmModel realm) {
         return session.groups().getGroupByName(realm, null, DelegatedAdminGuardEventListener.APPROLES_GROUP_NAME);
+    }
+
+    private boolean hasRealmRole(RealmModel realm, UserModel user, String roleName) {
+        RoleModel role = realm.getRole(roleName);
+        return role != null && user.hasRole(role);
     }
 
     private boolean hasPcaBaseRole(RealmModel realm, UserModel user) {

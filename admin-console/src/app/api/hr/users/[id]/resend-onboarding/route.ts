@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
+import { logAdminAction } from "@/lib/actionAudit";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       query: { lifespan: config.onboardingLifespanSeconds },
       body: actions,
     });
+    await logAdminAction(auth.ctx, "user.onboarding.resend", id, { actions });
     return NextResponse.json({ ok: true, actions });
   } catch (err) {
     return errorResponse(err);

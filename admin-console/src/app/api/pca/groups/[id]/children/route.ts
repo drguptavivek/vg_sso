@@ -5,6 +5,7 @@ import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
 import { getOwnedRootPaths, isWithinOwnedTree } from "@/lib/ownership";
 import type { KcGroup } from "@/types/keycloak";
+import { logAdminAction } from "@/lib/actionAudit";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       method: "POST",
       body: { name: body.name.trim() },
     });
+    await logAdminAction(auth.ctx, "group.create", undefined, { parentGroupId: id, parentPath: parent.path, name: body.name.trim() });
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (err) {
     return errorResponse(err);

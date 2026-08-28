@@ -36,6 +36,7 @@ COPY custom-user-onboarding-email-spi/target/*.jar /opt/keycloak/providers/
 COPY theme /opt/keycloak/themes
 COPY older_sso/groups_tree.json /opt/keycloak/import/groups_tree.json
 COPY older_sso/groups_expected.tsv /opt/keycloak/import/groups_expected.tsv
+COPY admin-console/src/config/designations.json /opt/keycloak/import/designations.json
 COPY scripts/step1_bootstrap_docker.sh /opt/keycloak/scripts/step1_bootstrap_docker.sh
 COPY scripts/step2_realm_config_docker.sh /opt/keycloak/scripts/step2_realm_config_docker.sh
 COPY scripts/step3_claims_config_docker.sh /opt/keycloak/scripts/step3_claims_config_docker.sh
@@ -49,7 +50,7 @@ COPY scripts/step10_user_onboarding_setup.sh /opt/keycloak/scripts/step10_user_o
 
 RUN find /opt/keycloak/themes -type d -exec chmod 755 {} + \
     && find /opt/keycloak/themes -type f -exec chmod 644 {} + \
-    && chmod 644 /opt/keycloak/import/groups_tree.json /opt/keycloak/import/groups_expected.tsv \
+    && chmod 644 /opt/keycloak/import/groups_tree.json /opt/keycloak/import/groups_expected.tsv /opt/keycloak/import/designations.json \
     && chmod 755 /opt/keycloak/scripts/step*.sh
 
 RUN set -eu; \

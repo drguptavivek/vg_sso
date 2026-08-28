@@ -4,6 +4,11 @@ import { config } from "@/lib/config";
 import { kcAdminRequest, KeycloakAdminError } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
 import { enrichUsersWithAdminAccess } from "@/lib/adminAccess";
+import { USER_PROFILE_ATTRIBUTE_FIELDS, USER_PROFILE_FIELDS } from "@/lib/userProfileFields";
+import { fetchHrmsEmployee } from "@/lib/hrms/client";
+import { extensionFromHrms } from "@/lib/hrms/mapping";
+import { upsertUserExtension } from "@/db/userExtensions";
+import { recordAdminAction } from "@/db/actionLog";
 import type { CreateUserRequest, KcGroup, KcUser } from "@/types/keycloak";
 
 type Query = Record<string, string | number | boolean | undefined>;
@@ -191,10 +196,35 @@ export async function POST(req: NextRequest) {
   }
 
   const attributes: Record<string, string[]> = {};
+  for (const [name, rawValues] of Object.entries(body.attributes ?? {})) {
+    if (!USER_PROFILE_ATTRIBUTE_FIELDS.has(name)) {
+      return NextResponse.json({ error: `Unsupported user attribute: ${name}` }, { status: 400 });
+    }
+    const field = USER_PROFILE_FIELDS.find((candidate) => candidate.name === name);
+    const values = rawValues.map((value) => value.trim()).filter(Boolean);
+    if (!field?.multivalued && values.length > 1) {
+      return NextResponse.json({ error: `${field?.label ?? name} accepts only one value` }, { status: 400 });
+    }
+    if (field?.options && values.some((value) => !field.options?.includes(value))) {
+      return NextResponse.json({ error: `Invalid option for ${field.label}` }, { status: 400 });
+    }
+    if (values.length) attributes[name] = values;
+  }
   if (body.phoneNumber) {
     attributes.phone_number = [body.phoneNumber];
   }
+  if (attributes.phone_number?.length) attributes.phone_verified = ["false"];
 
+  let hrms = null;
+  if (body.hrmsEmployeeId) {
+    try {
+      hrms = await fetchHrmsEmployee(body.hrmsEmployeeId.trim());
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+
+  let createdUserId: string | undefined;
   try {
     const { location } = await kcAdminRequest(auth.ctx.accessToken, "/users", {
       method: "POST",
@@ -211,9 +241,24 @@ export async function POST(req: NextRequest) {
     });
 
     const userId = location ? location.split("/").filter(Boolean).pop() : undefined;
+    createdUserId = userId;
     if (!userId) {
       return NextResponse.json({ error: "User created but id could not be determined" }, { status: 500 });
     }
+
+    if (hrms) await upsertUserExtension(extensionFromHrms(userId, hrms));
+    await recordAdminAction({
+      actorUserId: auth.ctx.userId,
+      actorUsername: auth.ctx.username,
+      targetUserId: userId,
+      action: "user.create",
+      outcome: "success",
+      summary: {
+        username: body.username.trim(),
+        hrmsAttached: Boolean(hrms),
+        profileFields: ["username", "email", "firstName", "lastName", ...Object.keys(attributes)],
+      },
+    });
 
     let onboardingSent = false;
     let onboardingError: string | undefined;
@@ -232,6 +277,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ id: userId, onboardingSent, onboardingError }, { status: 201 });
   } catch (err) {
+    if (createdUserId) {
+      try {
+        await kcAdminRequest(auth.ctx.accessToken, `/users/${createdUserId}`, { method: "DELETE" });
+      } catch {
+        // Preserve the original error; a failed compensating delete is visible in Keycloak events.
+      }
+    }
     return errorResponse(err);
   }
 }

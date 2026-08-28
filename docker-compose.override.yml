@@ -12,7 +12,7 @@ services:
       KC_LOG: console
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
-    command: [ "start-dev", "--http-port=8080", "--hostname-strict=false", "--health-enabled=true", "--spi-theme-cache-themes=false", "--spi-theme-cache-templates=false", "--features=scripts" ]
+    command: [ "start-dev", "--http-port=8080", "--hostname-strict=false", "--health-enabled=true", "--spi-theme-cache-themes=false", "--spi-theme-cache-templates=false", "--spi-theme-static-max-age=86400", "--features=scripts" ]
     ports:
       - "8080:8080"
       - "9000:9000"

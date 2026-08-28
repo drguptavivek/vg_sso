@@ -83,7 +83,9 @@ When iterating on a custom SPI (Java), **do not do a full image rebuild**. Build
 mvn -q -f custom-delegated-admin-guard-spi/pom.xml -DskipTests package
 
 # 2. Copy JAR into the running container
-docker cp custom-delegated-admin-guard-spi/target/custom-delegated-admin-guard-spi-1.0.0.jar \
+docker exec vg-keycloak find /opt/keycloak/providers -maxdepth 1 -type f \
+  -name 'custom-delegated-admin-guard-spi-*.jar' -delete
+docker cp custom-delegated-admin-guard-spi/target/custom-delegated-admin-guard-spi-1.2.0.jar \
   vg-keycloak:/opt/keycloak/providers/
 
 # 3. Restart Keycloak to pick up the new JAR

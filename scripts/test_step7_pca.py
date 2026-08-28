@@ -40,7 +40,7 @@ from urllib3.exceptions import InsecureRequestWarning
 
 urllib3.disable_warnings(InsecureRequestWarning)
 
-SYSTEM_CLIENT_IDS = ['broker', 'realm-management', 'security-admin-console']
+SYSTEM_CLIENT_IDS = ['broker', 'realm-management', 'security-admin-console', 'sso-self-registration']
 APPROLES_GROUP_NAME = 'AppRoles'
 
 

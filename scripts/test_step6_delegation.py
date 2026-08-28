@@ -26,6 +26,7 @@ SYSTEM_CLIENT_IDS = [
     'broker',
     'realm-management',
     'security-admin-console',
+    'sso-self-registration',
 ]
 
 

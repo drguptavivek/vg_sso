@@ -40,6 +40,18 @@ copy_resolved_asset() {
         "theme/vg-master/login/resources/img/background.png"
       )
       ;;
+    portrait.jpg)
+      targets+=(
+        "theme/vg/login/resources/img/portrait.jpg"
+        "theme/vg-master/login/resources/img/portrait.jpg"
+      )
+      ;;
+    background-*.jpg)
+      targets+=(
+        "theme/vg/login/resources/img/${base_name}"
+        "theme/vg-master/login/resources/img/${base_name}"
+      )
+      ;;
     green_logo.png)
       targets+=(
         "theme/admin-vg-custom/admin/resources/img/green_logo.png"
@@ -110,6 +122,14 @@ copy_resolved_asset() {
 
 # Apply known theme assets with source fallback to /assets.
 copy_resolved_asset "background.png"
+copy_resolved_asset "portrait.jpg"
+for responsive_background in \
+  background-desktop-1280.jpg \
+  background-desktop-1920.jpg \
+  background-desktop-2560.jpg \
+  background-desktop-3204.jpg; do
+  copy_resolved_asset "${responsive_background}"
+done
 copy_resolved_asset "green_logo.png"
 copy_resolved_asset "logo.png"
 copy_resolved_asset "logo.svg"

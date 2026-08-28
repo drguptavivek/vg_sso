@@ -26,11 +26,19 @@ STEP2_MARKER_FILE="${STEP2_MARKER_FILE:-/opt/keycloak/data/.step2-init-done}"
 STEP2_FORCE="${STEP2_FORCE:-false}"
 STEP2_GROUPS_TREE_FILE_LOCAL="${STEP2_GROUPS_TREE_FILE_LOCAL:-/workspace/.local/groups/groups_tree.json}"
 STEP2_GROUPS_TREE_FILE_DEFAULT="${STEP2_GROUPS_TREE_FILE_DEFAULT:-/opt/keycloak/import/groups_tree.json}"
+STEP2_DESIGNATIONS_FILE_LOCAL="${STEP2_DESIGNATIONS_FILE_LOCAL:-/workspace/admin-console/src/config/designations.json}"
+STEP2_DESIGNATIONS_FILE_DEFAULT="${STEP2_DESIGNATIONS_FILE_DEFAULT:-/opt/keycloak/import/designations.json}"
 
 if [[ -f "$STEP2_GROUPS_TREE_FILE_LOCAL" ]]; then
   STEP2_GROUPS_TREE_FILE="$STEP2_GROUPS_TREE_FILE_LOCAL"
 else
   STEP2_GROUPS_TREE_FILE="$STEP2_GROUPS_TREE_FILE_DEFAULT"
+fi
+
+if [[ -f "$STEP2_DESIGNATIONS_FILE_LOCAL" ]]; then
+  STEP2_DESIGNATIONS_FILE="$STEP2_DESIGNATIONS_FILE_LOCAL"
+else
+  STEP2_DESIGNATIONS_FILE="$STEP2_DESIGNATIONS_FILE_DEFAULT"
 fi
 
 required_vars=(
@@ -356,7 +364,7 @@ cat >"$profile_payload" <<'JSON'
       },
       "validations": {
         "options": {
-          "options": ["Permanent", "Contract", "Research", "Student", "Deputed", "Outsourced"]
+          "options": ["Permanent", "Contract", "Research", "Student", "Deputed", "Outsourced", "Vendor"]
         }
       },
       "multivalued": false
@@ -398,69 +406,7 @@ cat >"$profile_payload" <<'JSON'
       },
       "validations": {
         "options": {
-          "options": [
-            "Director",
-            "Dean",
-            "Medical Superintendent",
-            "Professor",
-            "Additional Professor",
-            "Associate Professor",
-            "Assistant Professor",
-            "Senior Resident",
-            "Junior Resident",
-            "Chief Medical Officer",
-            "Medical Officer",
-            "Consultant",
-            "Specialist",
-            "Registrar",
-            "Demonstrator",
-            "Tutor",
-            "Scientist I",
-            "Scientist II",
-            "Scientist III",
-            "Scientist IV",
-            "Scientist V",
-            "Lab Technician",
-            "Senior Lab Technician",
-            "Junior Lab Technician",
-            "Research Associate",
-            "Research Fellow",
-            "Project Scientist",
-            "Project Assistant",
-            "Project Technician",
-            "Data Manager",
-            "Biostatistician",
-            "Epidemiologist",
-            "Clinical Psychologist",
-            "Physiotherapist",
-            "Occupational Therapist",
-            "Speech Therapist",
-            "Dietician",
-            "Pharmacist",
-            "Senior Pharmacist",
-            "Store Officer",
-            "Administrative Officer",
-            "Section Officer",
-            "Accounts Officer",
-            "Finance Officer",
-            "HR Officer",
-            "IT Officer",
-            "System Analyst",
-            "Network Engineer",
-            "Security Officer",
-            "Public Relations Officer",
-            "Legal Officer",
-            "Warden",
-            "Matron",
-            "Nursing Superintendent",
-            "Deputy Nursing Superintendent",
-            "Assistant Nursing Superintendent",
-            "Staff Nurse",
-            "ANM",
-            "Driver",
-            "Attendant",
-            "Housekeeping Supervisor"
-          ]
+          "options": []
         }
       },
       "multivalued": false
@@ -494,6 +440,19 @@ cat >"$profile_payload" <<'JSON'
   ]
 }
 JSON
+if [[ ! -f "$STEP2_DESIGNATIONS_FILE" ]]; then
+  echo "STEP2 ERROR: designation options file not found: $STEP2_DESIGNATIONS_FILE"
+  exit 1
+fi
+if ! jq -e 'type == "array" and length > 0 and all(.[]; type == "string" and length > 0) and (length == (unique | length))' "$STEP2_DESIGNATIONS_FILE" >/dev/null; then
+  echo "STEP2 ERROR: designation options must be a non-empty JSON array of unique, non-empty strings."
+  exit 1
+fi
+designation_profile_payload="$(mktemp)"
+jq --slurpfile designations "$STEP2_DESIGNATIONS_FILE" '(.attributes[] | select(.name == "designation") | .validations.options.options) = $designations[0]' \
+  "$profile_payload" >"$designation_profile_payload"
+mv "$designation_profile_payload" "$profile_payload"
+
 kcadm update "users/profile" -r "${REALM_NAME}" -f "$profile_payload" >/dev/null
 rm -f "$profile_payload"
 
