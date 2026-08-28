@@ -5,7 +5,7 @@ COMPOSE_PROD := docker compose -f docker-compose.yml
 ADMIN_CONSOLE_ENV_FILE ?= .env.admin-console
 ADMIN_CONSOLE_COMPOSE := docker compose --env-file .env --env-file $(ADMIN_CONSOLE_ENV_FILE) -f docker-compose.yml -f docker-compose.override.yml --profile admin-console
 COMPOSE_UPGRADE_TEST := docker compose -p vg_sso_upgrade_test -f docker-compose.upgrade-test.yml
-UPGRADE_TEST_VERSION ?= 26.6.3
+UPGRADE_TEST_VERSION ?= 26.7.2
 UPGRADE_TEST_IMAGE ?= vg_sso-keycloak-upgrade-test:$(UPGRADE_TEST_VERSION)
 UPGRADE_TEST_KEYCLOAK_IMAGE ?= quay.io/keycloak/keycloak:$(UPGRADE_TEST_VERSION)
 SPI_MVN_ARGS ?=
@@ -56,9 +56,9 @@ help:
 	@echo "  make test-config      Run live config tests profile"
 	@echo "  make test-step6       Run step6 tests profile"
 	@echo "  make test-step7       Run step7 tests profile"
-	@echo "  make upgrade-test-build   Build 26.6.3 rehearsal image without changing production"
+	@echo "  make upgrade-test-build   Build 26.7.2 rehearsal image without changing production"
 	@echo "  make upgrade-test-db-copy Copy live Postgres into isolated upgrade-test Postgres"
-	@echo "  make upgrade-test-up      Start 26.6.3 rehearsal Keycloak on 18080/19000"
+	@echo "  make upgrade-test-up      Start 26.7.2 rehearsal Keycloak on 18080/19000"
 	@echo "  make upgrade-test-logs    Tail upgrade-test Keycloak logs"
 	@echo "  make upgrade-test-version Print test Keycloak version"
 	@echo "  make upgrade-test-down    Stop upgrade-test containers"

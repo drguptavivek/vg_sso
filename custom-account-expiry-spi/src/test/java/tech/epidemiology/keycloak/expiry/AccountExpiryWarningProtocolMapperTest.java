@@ -5,7 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
-import java.util.Map;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.keycloak.models.ClientSessionContext;
 import org.keycloak.models.KeycloakContext;
@@ -48,14 +48,13 @@ class AccountExpiryWarningProtocolMapperTest {
     AccessToken token = new AccessToken();
     mapper.setClaim(token, model, userSession, session, mock(ClientSessionContext.class));
 
-    @SuppressWarnings("unchecked")
-    Map<String, Object> claim = (Map<String, Object>) token.getOtherClaims().get("account_expiry");
+    JsonNode claim = (JsonNode) token.getOtherClaims().get("account_expiry");
     assertThat(claim).isNotNull();
-    assertThat(claim.get("configured")).isEqualTo(true);
-    assertThat(claim.get("warning")).isEqualTo(true);
-    assertThat(claim.get("expired")).isEqualTo(false);
-    assertThat(claim.get("timeZone")).isEqualTo("Asia/Kolkata");
-    assertThat(((Number) claim.get("daysRemaining")).longValue()).isBetween(13L, 14L);
+    assertThat(claim.get("configured").asBoolean()).isTrue();
+    assertThat(claim.get("warning").asBoolean()).isTrue();
+    assertThat(claim.get("expired").asBoolean()).isFalse();
+    assertThat(claim.get("timeZone").asText()).isEqualTo("Asia/Kolkata");
+    assertThat(claim.get("daysRemaining").asLong()).isBetween(13L, 14L);
   }
 
   @Test
@@ -85,11 +84,10 @@ class AccountExpiryWarningProtocolMapperTest {
     AccessToken token = new AccessToken();
     mapper.setClaim(token, model, userSession, session, mock(ClientSessionContext.class));
 
-    @SuppressWarnings("unchecked")
-    Map<String, Object> claim = (Map<String, Object>) token.getOtherClaims().get("account_expiry");
+    JsonNode claim = (JsonNode) token.getOtherClaims().get("account_expiry");
     assertThat(claim).isNotNull();
-    assertThat(claim.get("configured")).isEqualTo(false);
-    assertThat(claim.get("warning")).isEqualTo(false);
-    assertThat(claim.get("expired")).isEqualTo(false);
+    assertThat(claim.get("configured").asBoolean()).isFalse();
+    assertThat(claim.get("warning").asBoolean()).isFalse();
+    assertThat(claim.get("expired").asBoolean()).isFalse();
   }
 }

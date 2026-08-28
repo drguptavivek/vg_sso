@@ -20,7 +20,7 @@ services:
       retries: 30
 
   upgrade-keycloak:
-    image: ${UPGRADE_TEST_IMAGE:-vg_sso-keycloak-upgrade-test:26.6.3}
+    image: ${UPGRADE_TEST_IMAGE:-vg_sso-keycloak-upgrade-test:26.7.2}
     container_name: vg-keycloak-upgrade-test
     restart: "no"
     depends_on:

@@ -68,7 +68,7 @@ If `keycloak-current/` is not the intended target in your checkout, point the sy
 
 ## Keycloak Version Notes
 
-- The image currently builds from Keycloak `26.6.3`.
+- The image currently builds from Keycloak `26.7.2`.
 - Keycloak 26.x `bootstrap-admin` does not accept `--password`; use `--password:env`.
 - On this setup, `kcadm.sh set-password` treats `--temporary` as a flag.
   - Permanent password: omit `--temporary`.

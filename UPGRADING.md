@@ -2,7 +2,7 @@
 
 This repo uses a Docker-based Keycloak runtime. Test Keycloak upgrades against a cloned database before changing production.
 
-Current rehearsed target: Keycloak `26.6.3`.
+Target under rehearsal: Keycloak `26.7.2`.
 
 ## Principles
 
@@ -25,7 +25,7 @@ The upgrade-test stack uses:
 - Test logs: `logs/keycloak-upgrade-test/`
 - Test DB dumps: `backups/upgrade-test/`
 
-The source checkout under `keycloak_sources/` is useful for reference/debugging, but the SPI build does not require Keycloak sources. The SPI modules compile from Maven artifacts using `-Dkeycloak.version=<target>`.
+The `keycloak_sources/` submodule is pinned to the same official release tag as the runtime for reference and debugging, but the SPI build does not require Keycloak sources. The SPI modules compile from Maven artifacts using `-Dkeycloak.version=<target>`.
 
 ## Rehearsal Commands
 
@@ -44,10 +44,10 @@ make upgrade-test-build
 This expands to a target-version SPI build similar to:
 
 ```bash
-make build-spis SPI_MVN_ARGS="-Dkeycloak.version=26.6.3"
+make build-spis SPI_MVN_ARGS="-Dkeycloak.version=26.7.2"
 docker build \
-  --build-arg KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:26.6.3 \
-  -t vg_sso-keycloak-upgrade-test:26.6.3 .
+  --build-arg KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:26.7.2 \
+  -t vg_sso-keycloak-upgrade-test:26.7.2 .
 ```
 
 Clone the live DB into isolated test Postgres:
@@ -56,7 +56,7 @@ Clone the live DB into isolated test Postgres:
 make upgrade-test-db-copy
 ```
 
-Start the 26.6.3 test Keycloak against the cloned DB:
+Start the 26.7.2 test Keycloak against the cloned DB:
 
 ```bash
 make upgrade-test-up
@@ -110,7 +110,7 @@ docker logs vg-keycloak-upgrade-test 2>&1 | rg -n \
 
 Expected successful signals include:
 
-- `Keycloak 26.6.3 ... started`
+- `Keycloak 26.7.2 ... started`
 - `Updating database. Using changelog META-INF/jpa-changelog-master.xml`
 - realm migration messages for `master` and the deployed realm
 - `Bootstrap completed`
@@ -151,6 +151,33 @@ curl -fsS -H "Authorization: Bearer $TOKEN" \
   http://localhost:18080/realms/${KC_NEW_REALM_NAME}/phone-otp-admin/access
 ```
 
+## 26.7.2 Migration Review
+
+Review these upstream changes during the isolated rehearsal:
+
+- Keycloak 26.7.2 disables the legacy client-initiated account-linking endpoint by default. This deployment should remain on Application Initiated Actions rather than enabling the deprecated compatibility option.
+- Keycloak 26.7.1 requires both target-client management and client-scope management when assigning client scopes. Re-test `client-manager` denial boundaries and realm-admin initialization scripts.
+- Admin API access now accepts administrative roles from actual user or group role assignments, not roles injected only through protocol mappers. Validate `user-manager`, `client-manager`, realm-admin, and delegated App Admin sessions.
+- FGAP group searches may return stripped ancestor representations. Re-test the standalone admin console group browser and owned AppRoles trees.
+- Keycloak 26.7.0 removed `view-system`; confirm no deployment role mapping relies on it.
+- Re-run all SPI compilation and live configuration tests because Keycloak 26.7 upgrades internal server APIs and Quarkus.
+
+Official guide: https://www.keycloak.org/docs/latest/upgrading/index.html
+
+## 26.7.2 Rehearsal Result (2026-08-28)
+
+The upgrade was rehearsed against a fresh, disposable restore of the production database backup. The live database and live Keycloak container were not modified.
+
+- All eight custom SPI modules compiled and their Maven test suites passed against Keycloak 26.7.2.
+- The custom image built successfully from `quay.io/keycloak/keycloak:26.7.2` and reports Keycloak 26.7.2 at runtime.
+- `keycloak_sources` is pinned to the official `26.7.2` tag (`289376b142480b4d600aca7acb1e4651862ed2a1`).
+- The disposable database restore completed and Keycloak migrated the stored model to 26.7.0, as expected for the 26.7 release line.
+- The isolated server reached `UP` readiness on port `19000`, with no startup errors or exceptions in the migration log.
+- The master and `aiims-new-delhi` admin/account console routes responded successfully.
+- The custom async-email, account-expiry, and phone-OTP endpoints returned authentication-required responses rather than not-found responses, confirming that their providers loaded.
+
+Before production promotion, complete authenticated checks on the isolated stack for realm-admin, user-manager, client-manager, and delegated application-admin accounts. Exercise FGAP group browsing, client-scope denial rules, custom bearer-protected endpoints, OTP login, and onboarding.
+
 ## 26.6.3 Rehearsal Result
 
 The local rehearsal on the cloned database completed successfully:
@@ -183,7 +210,7 @@ Only after the rehearsal passes:
 2. Change the production Dockerfile default base image to the target version, for example:
 
    ```dockerfile
-   ARG KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:26.6.3
+   ARG KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:26.7.2
    ```
 
 3. Rebuild and deploy production:
