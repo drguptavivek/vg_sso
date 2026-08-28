@@ -11,8 +11,8 @@ interface RouteParams {
   params: Promise<{ id: string; userId: string }>;
 }
 
-export async function DELETE(_req: NextRequest, { params }: RouteParams) {
-  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole]);
+export async function DELETE(req: NextRequest, { params }: RouteParams) {
+  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole], req);
   if (!auth.ok) return auth.response;
 
   const { id, userId } = await params;

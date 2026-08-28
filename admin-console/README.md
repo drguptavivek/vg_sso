@@ -9,10 +9,11 @@ Standalone Next.js app providing two self-service dashboards on top of the Keycl
 - `/groups` - a full-width, three-workspace Groups dashboard. Its group workspaces use live-filtered columns for parent groups/applications, recursively nested child groups/roles, and direct members. The member column includes the selected group's full breadcrumb. `user-manager` and realm admins can browse institute-wide groups, inspect all application roles, and audit a user's memberships. `user-manager` can manage memberships but not application-role structure.
 - Delegated administrators see only owned `AppRoles/{clientId}` applications. Each application-role card shows its direct-member count and opens the exact user list, so delegates can see and manage which users hold which roles in their own applications. Institute-wide groups and user audit are not exposed to delegates.
 - Holders of `realm-management -> realm-admin` have full access to both dashboards and all application roots.
-- `/register` - an unauthenticated but LAN-only EHRMS self-registration page. It shows masked EHRMS contacts, performs server-side duplicate checks, and creates the account through a separate restricted Keycloak service client. See [`docs/SelfRegistration.md`](../docs/SelfRegistration.md).
+- `/register` - an unauthenticated but LAN-only EHRMS self-registration page for permanent employees. It shows masked EHRMS contacts, performs server-side duplicate checks, and creates the account through a separate restricted Keycloak service client. See [`docs/SelfRegistration.md`](../docs/SelfRegistration.md).
+- `/help` - public registration instructions covering email verification, password setup, MFA, recovery codes, and first-login mobile OTP.
 - `/audit` - available only to `realm-management -> realm-admin`. It shows a filterable, paginated log of mutations made through this application. Entries contain actor and target Keycloak UUIDs, action, outcome, and a redacted summary; passwords, tokens, full PAN values, and complete HRMS responses are never logged.
 
-Visiting `/` redirects realm administrators to `/hr`; other users are routed to the dashboard matching their application role or shown a missing-role message.
+For a signed-out visitor, `/` is a public choice page with Sign in, Self-register, and Registration help. It does not automatically start OIDC. A signed-in realm administrator is redirected to `/hr`; other signed-in users are routed to the dashboard matching their application role or shown a missing-role message. Public page names come from `KC_NEW_REALM_NAME`; logos and favicons come from gitignored `.local/brand-assets` via `make apply-branding`.
 
 ## Screenshots
 
@@ -40,6 +41,10 @@ So this app is a curated UI over capability that already exists, not a new privi
 ## Configuration
 
 For Docker Compose, copy the repo root `.env.admin-console.template` to `.env.admin-console`. For local development outside Docker Compose, copy `.env.local.example` to `.env.local` and adjust as needed.
+
+`KC_NEW_REALM_NAME` must also be present in `.env.admin-console`; its exact configured value is used for public page names. No institute name is compiled into the app.
+
+The Next.js image build context is only `admin-console/`. The Compose service intentionally uses an explicit `environment:` allowlist and must never be changed to `env_file: .env`. Consequently the Next.js process receives only its realm/OIDC, extension-database, HRMS, and self-registration settings; Keycloak bootstrap credentials, Keycloak database credentials, SMTP secrets, and unrelated stack variables are not exposed to it.
 
 Two Keycloak URLs are configured separately to support running inside docker compose:
 
@@ -75,6 +80,32 @@ The app listens on `http://localhost:3100` by default.
 The app is excluded from normal stack startup and runs only under the `admin-console` Compose profile. Configure its confidential OIDC client manually as documented in `docs/AdminConsole.md`, copy `.env.admin-console.template` to `.env.admin-console`, then run `make admin-console-build` and `make admin-console-up`.
 
 With `docker-compose.override.yml`, the `admin-console` service runs `next dev` in HMR mode. The host `./admin-console` directory is mounted at `/app`, while `node_modules` and `.next` use isolated named volumes so source edits reload without rebuilding the image. The base `docker-compose.yml` remains production-oriented and runs the standalone Next.js image.
+
+## Logs
+
+Live Next.js output stays on container stdout/stderr:
+
+```bash
+make admin-console-logs
+# or
+docker logs --timestamps --tail=200 -f vg-admin-console
+```
+
+Archive it into dated, host-only files with mode `0600`:
+
+```bash
+make admin-console-log-archive
+ls logs/admin-console/
+# 2026-08-28.log  2026-08-29.log  ...
+```
+
+The archive uses a watermark to avoid duplicate collection and removes dated `.log` files after 250 days. Run it daily; for example, in the `ssopublic` user's crontab:
+
+```cron
+5 0 * * * cd /home/ssopublic/vg_sso && /usr/bin/make admin-console-log-archive
+```
+
+Docker's immediate JSON log is independently bounded to ten 50 MB segments, preventing disk exhaustion between archive runs. The database-backed `/audit` action log is separate from process logs.
 
 ## Exposure
 

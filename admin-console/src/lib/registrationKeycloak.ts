@@ -159,13 +159,23 @@ async function usernameAvailable(username: string): Promise<boolean> {
 }
 
 export async function chooseRegistrationUsername(draft: KeycloakProfileDraft, employeeId: string): Promise<string> {
-  const cleanEmployeeId = normalizeEmployeeId(employeeId).toLocaleLowerCase().replace(/[^a-z0-9._-]+/g, ".");
-  const base = (draft.username || cleanEmployeeId).toLocaleLowerCase().replace(/[^a-z0-9._-]+/g, ".")
-    .replace(/^\.+|\.+$/g, "") || `user.${cleanEmployeeId}`;
+  const normalizePart = (value: string) => value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+  const firstInitial = normalizePart(draft.firstName).slice(0, 1);
+  const lastName = normalizePart(draft.lastName || draft.firstName);
+  const employeeSuffix = normalizePart(normalizeEmployeeId(employeeId)).slice(-5);
+  const base = `${firstInitial}${lastName}${employeeSuffix}`.slice(0, 255)
+    || `user${employeeSuffix}`;
   if (await usernameAvailable(base)) return base;
-  const withEmployeeId = `${base}.${cleanEmployeeId}`.slice(0, 255);
-  if (await usernameAvailable(withEmployeeId)) return withEmployeeId;
-  return `${withEmployeeId.slice(0, 246)}.${crypto.randomUUID().slice(0, 8)}`;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const candidate = `${base.slice(0, 250)}${crypto.randomUUID().replaceAll("-", "").slice(0, 5)}`;
+    if (await usernameAvailable(candidate)) return candidate;
+  }
+  throw new RegistrationKeycloakError(409, "A unique username could not be generated");
 }
 
 export async function createRegisteredUser(options: {
@@ -178,6 +188,9 @@ export async function createRegisteredUser(options: {
       .filter(([, values]) => values.length > 0),
   ) as Record<string, string[]>;
   attributes.phone_verified = ["false"];
+  // The Keycloak guard permits compensating DELETE only for a freshly
+  // created account carrying this server-managed marker.
+  attributes.self_registration_pending = ["true"];
 
   const response = await serviceAdminRequest("/users", {
     method: "POST",

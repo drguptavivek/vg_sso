@@ -2,6 +2,7 @@ import type { DefaultSession } from "next-auth";
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
+    /** Server-only, non-enumerable; never serialized by /api/auth/session. */
     accessToken?: string;
     error?: string;
     roles: string[];

@@ -47,7 +47,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 }
 
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
-  const auth = await requireRole(config.userManagerRole);
+  const auth = await requireRole(config.userManagerRole, req);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;

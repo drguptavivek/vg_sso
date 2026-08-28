@@ -57,6 +57,8 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
     private static final Logger LOG = Logger.getLogger(DelegatedAdminGuardFilter.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String SELF_REGISTRATION_SERVICE_ROLE = "self-registration-service";
+    private static final String SELF_REGISTRATION_PENDING_ATTRIBUTE = "self_registration_pending";
+    private static final long SELF_REGISTRATION_ROLLBACK_WINDOW_MILLIS = 15L * 60L * 1000L;
 
     // PUT /admin/realms/{realm}/users/{userId}; group(1) is the target UUID.
     // POST /admin/realms/{realm}/users (self-registration account creation).
@@ -66,6 +68,10 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
 
     private static final Pattern USER_ROOT_PATH = Pattern.compile(
         "^/admin/realms/[^/]+/users/([^/]+)$"
+    );
+
+    private static final Pattern USER_ANY_PATH = Pattern.compile(
+        "^/admin/realms/[^/]+/users(?:/.*)?$"
     );
 
     // /admin/realms/{realm}/clients/{uuid}[/anything...]
@@ -118,6 +124,9 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
     );
 
     private static final Set<String> MUTATE_METHODS = Set.of("POST", "PUT", "DELETE", "PATCH");
+    private static final Set<String> REGISTRATION_SEARCH_QUERY_KEYS = Set.of(
+        "email", "username", "q", "exact", "first", "max", "briefRepresentation"
+    );
 
     // System clients that client-manager can never edit or delete.
     // FGAP v2 NEGATIVE policy would cover this, but when manage-clients is added
@@ -151,7 +160,8 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
 
         String methodUpper = method.toUpperCase();
         boolean isMutate = MUTATE_METHODS.contains(methodUpper);
-        if (!isMutate) {
+        boolean isUserRead = "GET".equals(methodUpper) && USER_ANY_PATH.matcher(path).matches();
+        if (!isMutate && !isUserRead) {
             return;
         }
 
@@ -195,13 +205,20 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
         // create-user-only built-in role. Restrict its mutation surface here.
         if (hasRealmRole(realm, actor, SELF_REGISTRATION_SERVICE_ROLE)) {
             boolean mayCreate = "POST".equals(methodUpper) && USER_COLLECTION_PATH.matcher(path).matches();
-            boolean mayCompensateDelete = "DELETE".equals(methodUpper) && USER_ROOT_PATH.matcher(path).matches();
-            if (!mayCreate && !mayCompensateDelete) {
+            boolean mayCompensateDelete = "DELETE".equals(methodUpper)
+                && isRecentPendingSelfRegistration(realm, path);
+            boolean maySearch = "GET".equals(methodUpper)
+                && USER_COLLECTION_PATH.matcher(path).matches()
+                && isAllowedRegistrationSearch(ctx);
+            if (!mayCreate && !mayCompensateDelete && !maySearch) {
                 LOG.warnf(
-                    "DELEGATED_ADMIN_GUARD_FILTER: Blocking registration-service mutation %s path=%s realm=%s",
+                    "DELEGATED_ADMIN_GUARD_FILTER: Blocking registration-service request %s path=%s realm=%s",
                     methodUpper, path, realm.getName()
                 );
-                ctx.abortWith(forbidden("The self-registration service may only create accounts or roll back a failed creation."));
+                ctx.abortWith(forbidden(
+                    "The self-registration service may only run an exact conflict check, create an account, "
+                    + "or roll back its own recent failed creation."
+                ));
             }
             return;
         }
@@ -423,6 +440,37 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
             "This delegated admin operation is not allowed by policy. " +
             "Contact a realm administrator."
         ));
+    }
+
+    private boolean isRecentPendingSelfRegistration(RealmModel realm, String path) {
+        java.util.regex.Matcher matcher = USER_ROOT_PATH.matcher(path);
+        if (!matcher.matches()) return false;
+
+        UserModel target = session.users().getUserById(realm, matcher.group(1));
+        if (target == null || !"true".equals(target.getFirstAttribute(SELF_REGISTRATION_PENDING_ATTRIBUTE))) {
+            return false;
+        }
+        Long createdAt = target.getCreatedTimestamp();
+        return createdAt != null
+            && createdAt > 0
+            && System.currentTimeMillis() - createdAt <= SELF_REGISTRATION_ROLLBACK_WINDOW_MILLIS;
+    }
+
+    private boolean isAllowedRegistrationSearch(ContainerRequestContext ctx) {
+        Set<String> keys = ctx.getUriInfo().getQueryParameters().keySet();
+        if (!REGISTRATION_SEARCH_QUERY_KEYS.containsAll(keys)) return false;
+        if (!"true".equalsIgnoreCase(ctx.getUriInfo().getQueryParameters().getFirst("exact"))) return false;
+
+        String email = ctx.getUriInfo().getQueryParameters().getFirst("email");
+        String username = ctx.getUriInfo().getQueryParameters().getFirst("username");
+        String attributeQuery = ctx.getUriInfo().getQueryParameters().getFirst("q");
+        int selectors = (email == null ? 0 : 1) + (username == null ? 0 : 1) + (attributeQuery == null ? 0 : 1);
+        if (selectors != 1) return false;
+        if (email != null) return !email.isBlank() && email.length() <= 255;
+        if (username != null) return !username.isBlank() && username.length() <= 255;
+        return attributeQuery != null
+            && attributeQuery.length() <= 320
+            && attributeQuery.matches("^(phone_number|employee_id):[^\\s:]+$");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────── //

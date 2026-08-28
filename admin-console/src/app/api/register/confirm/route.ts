@@ -15,10 +15,12 @@ import {
   claimRegistrationAttempt,
   finishRegistrationAttempt,
   hrmsFingerprint,
+  isPermanentHrmsEmployee,
   normalizeEmail,
   normalizePhone,
   RegistrationTokenError,
 } from "@/lib/selfRegistration";
+import { rejectCrossOriginMutation } from "@/lib/requestSecurity";
 
 const requestSchema = z.object({
   token: z.string().trim().min(32).max(256),
@@ -46,6 +48,8 @@ function noStore(body: object, init?: ResponseInit): NextResponse {
 }
 
 export async function POST(req: NextRequest) {
+  const originError = rejectCrossOriginMutation(req);
+  if (originError) return originError;
   const parsed = requestSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return noStore({ error: "A valid registration confirmation is required" }, { status: 400 });
@@ -65,6 +69,13 @@ export async function POST(req: NextRequest) {
   let createdUserId: string | undefined;
   try {
     const hrms = await fetchHrmsEmployee(attempt.employeeId);
+    if (!isPermanentHrmsEmployee(hrms)) {
+      await finishRegistrationAttempt(attempt.id, "blocked", "NOT_PERMANENT_EMPLOYEE");
+      return noStore({
+        error: "Self-registration is currently available only to permanent employees.",
+        code: "NOT_PERMANENT_EMPLOYEE",
+      }, { status: 403 });
+    }
     if (hrmsFingerprint(hrms) !== attempt.hrmsFingerprint) {
       await finishRegistrationAttempt(attempt.id, "failed", "HRMS_RECORD_CHANGED");
       return noStore({

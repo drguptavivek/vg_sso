@@ -9,8 +9,8 @@ interface RouteParams {
   params: Promise<{ id: string; groupId: string }>;
 }
 
-export async function PUT(_req: NextRequest, { params }: RouteParams) {
-  const auth = await requireRole(config.userManagerRole);
+export async function PUT(req: NextRequest, { params }: RouteParams) {
+  const auth = await requireRole(config.userManagerRole, req);
   if (!auth.ok) return auth.response;
 
   const { id, groupId } = await params;
@@ -26,8 +26,8 @@ export async function PUT(_req: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: RouteParams) {
-  const auth = await requireRole(config.userManagerRole);
+export async function DELETE(req: NextRequest, { params }: RouteParams) {
+  const auth = await requireRole(config.userManagerRole, req);
   if (!auth.ok) return auth.response;
 
   const { id, groupId } = await params;

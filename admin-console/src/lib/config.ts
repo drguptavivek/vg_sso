@@ -25,11 +25,9 @@ function optional(name: string, fallback: string): string {
 }
 
 /**
- * Prefer the same KC_NEW_REALM_NAME already set in the root .env for the
- * rest of the stack (docker compose passes it through via `env_file: .env`),
- * so the target realm only needs to be configured in one place. Falls back
- * to ADMIN_CONSOLE_KEYCLOAK_REALM for standalone (non-docker-compose) setups
- * that want this app pointed at a different realm.
+ * Compose explicitly allowlists KC_NEW_REALM_NAME into this container; it
+ * does not expose the root .env file to Next.js. Standalone deployments may
+ * instead provide ADMIN_CONSOLE_KEYCLOAK_REALM.
  */
 function realmName(): string {
   const fromRootEnv = process.env.KC_NEW_REALM_NAME;

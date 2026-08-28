@@ -64,7 +64,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 }
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
-  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole]);
+  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole], req);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;

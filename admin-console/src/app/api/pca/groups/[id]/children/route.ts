@@ -12,7 +12,7 @@ interface RouteParams {
 }
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
-  const auth = await requireRole(config.delegatedClientAdminRole);
+  const auth = await requireRole(config.delegatedClientAdminRole, req);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;

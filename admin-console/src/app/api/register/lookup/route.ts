@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { fetchHrmsEmployee, HrmsError } from "@/lib/hrms/client";
 import {
+  checkRegistrationLookupRateLimit,
   createRegistrationAttempt,
   hrmsFingerprint,
+  isPermanentHrmsEmployee,
   maskEmail,
   maskPhone,
   normalizeEmail,
@@ -11,6 +13,7 @@ import {
   normalizePhone,
   RegistrationRateLimitError,
 } from "@/lib/selfRegistration";
+import { rejectCrossOriginMutation } from "@/lib/requestSecurity";
 
 const requestSchema = z.object({
   employeeId: z.string().trim().min(1).max(64),
@@ -23,6 +26,8 @@ function noStore(body: object, init?: ResponseInit): NextResponse {
 }
 
 export async function POST(req: NextRequest) {
+  const originError = rejectCrossOriginMutation(req);
+  if (originError) return originError;
   const parsed = requestSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return noStore({ error: "A valid employee ID is required" }, { status: 400 });
@@ -30,9 +35,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const requestedEmployeeId = normalizeEmployeeId(parsed.data.employeeId);
+    checkRegistrationLookupRateLimit(requestedEmployeeId, req.headers);
     const hrms = await fetchHrmsEmployee(requestedEmployeeId);
     if (normalizeEmployeeId(hrms.employeeId) !== requestedEmployeeId) {
       return noStore({ error: "The EHRMS record did not match the requested employee ID" }, { status: 409 });
+    }
+    if (!isPermanentHrmsEmployee(hrms)) {
+      return noStore({
+        error: "Self-registration is currently available only to permanent employees.",
+      }, { status: 403 });
     }
 
     const email = normalizeEmail(hrms.emailAddress);

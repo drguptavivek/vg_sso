@@ -17,7 +17,7 @@ SPI_MVN_ARGS ?=
 	logs-runtime logs-init \
 	force-step1 force-step2 force-step3 force-step4 force-step5 force-step6 force-step7 force-step7-fgap force-step8 force-step9 force-step10 maintenance audit-export backup full-backup \
 	admin-console-build admin-console-db-provision admin-console-db-migrate \
-	admin-console-up admin-console-stop admin-console-logs \
+	admin-console-up admin-console-stop admin-console-logs admin-console-log-archive \
 	test-config test-step6 test-step7 \
 	upgrade-test-build upgrade-test-db-copy upgrade-test-up upgrade-test-logs upgrade-test-version upgrade-test-down upgrade-test-reset
 
@@ -57,6 +57,7 @@ help:
 	@echo "  make admin-console-up    Start the optional Next.js service"
 	@echo "  make admin-console-stop  Stop the optional Next.js service"
 	@echo "  make admin-console-logs  Tail optional admin-console logs"
+	@echo "  make admin-console-log-archive Archive dated host logs; retain 250 days"
 	@echo "  make maintenance      Run custom command in keycloak-maintenance (MAINT_CMD='...')"
 	@echo "  make audit-export     Run audit export now (updates watermark)"
 	@echo "  make backup           Dump DB and copy .env/.local into ~/sso_backups/<timestamp>"
@@ -176,7 +177,7 @@ force-step9:
 force-step10:
 	$(COMPOSE) run --rm -e STEP10_FORCE=true step10-init
 
-admin-console-build:
+admin-console-build: apply-branding
 	$(ADMIN_CONSOLE_COMPOSE) build admin-console-migrate admin-console
 
 admin-console-db-provision:
@@ -186,7 +187,7 @@ admin-console-db-migrate:
 	$(ADMIN_CONSOLE_COMPOSE) build admin-console-migrate
 	$(ADMIN_CONSOLE_COMPOSE) run --rm admin-console-migrate
 
-admin-console-up:
+admin-console-up: apply-branding
 	$(ADMIN_CONSOLE_COMPOSE) up -d admin-console
 
 admin-console-stop:
@@ -194,6 +195,9 @@ admin-console-stop:
 
 admin-console-logs:
 	$(ADMIN_CONSOLE_COMPOSE) logs --timestamps --tail=200 -f admin-console
+
+admin-console-log-archive:
+	./scripts/archive_admin_console_logs.sh
 
 maintenance:
 	$(COMPOSE) run --rm --no-build keycloak-maintenance /bin/bash -lc "$${MAINT_CMD:?Set MAINT_CMD='...'}"

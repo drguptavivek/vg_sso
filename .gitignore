@@ -44,6 +44,9 @@ theme/**/login/resources/img/logo.png
 theme/**/login/resources/img/background.png
 theme/**/login/resources/img/background-*.jpg
 theme/**/login/resources/img/portrait.jpg
+admin-console/public/brand/*
+!admin-console/public/brand/.gitkeep
+admin-console/public/favicon.ico
 
 .kcadm.master.config
 .kcadm.realm.config

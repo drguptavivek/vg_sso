@@ -1,7 +1,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
-COPY package.json ./
-RUN npm install --no-audit --no-fund
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
 FROM deps AS migration
 COPY . .
@@ -10,6 +10,7 @@ CMD ["npm", "run", "db:migrate"]
 
 FROM node:22-alpine AS build
 WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Build-time env is not required: this app reads Keycloak/NextAuth config at
@@ -19,10 +20,12 @@ RUN npm run build
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /app/public ./public
-COPY --from=build /app/.next/standalone ./
-COPY --from=build /app/.next/static ./.next/static
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --chown=node:node --from=build /app/public ./public
+COPY --chown=node:node --from=build /app/.next/standalone ./
+COPY --chown=node:node --from=build /app/.next/static ./.next/static
 
 EXPOSE 3100
 ENV PORT=3100
+USER node
 CMD ["node", "server.js"]

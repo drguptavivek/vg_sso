@@ -61,6 +61,7 @@ copy_resolved_asset() {
       ;;
     logo.png)
       targets+=(
+        "admin-console/public/brand/logo.png"
         "theme/admin-vg-custom/admin/resources/img/logo.png"
         "theme/vg/account/resources/img/logo.png"
         "theme/vg/admin/resources/img/logo.png"
@@ -82,6 +83,7 @@ copy_resolved_asset() {
       ;;
     favicon.ico)
       targets+=(
+        "admin-console/public/favicon.ico"
         "theme/admin-vg-custom/admin/favicon.ico"
         "theme/admin-vg-custom/admin/favicon-v2.ico"
         "theme/vg/admin/favicon.ico"

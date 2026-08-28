@@ -344,6 +344,8 @@ services:
       dockerfile: Dockerfile
     container_name: vg-admin-console
     restart: unless-stopped
+    # Deliberate variable allowlist: never add `env_file: .env` here. Root
+    # Keycloak bootstrap/database secrets must not reach the Next.js process.
     depends_on:
       admin-console-migrate:
         condition: service_completed_successfully
@@ -388,6 +390,11 @@ services:
       #     the firewall source-IP rule is what actually restricts it.
       #     See nginx-confs/hr-admin-console.conf for a proposed vhost.
       - "${ADMIN_CONSOLE_BIND_IP:-127.0.0.1}:${ADMIN_CONSOLE_PORT:-3100}:3100"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
 
   keycloak-maintenance:
     build:

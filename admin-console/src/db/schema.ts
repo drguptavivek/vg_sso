@@ -67,7 +67,8 @@ export const adminActionLogs = pgTable("admin_action_logs", {
 
 export const selfRegistrationAttempts = pgTable("self_registration_attempts", {
   id: uuid("id").primaryKey().defaultRandom(),
-  employeeId: varchar("employee_id", { length: 64 }).notNull(),
+  // Retained only while a short-lived confirmation is pending, then cleared.
+  employeeId: varchar("employee_id", { length: 64 }),
   employeeIdHash: varchar("employee_id_hash", { length: 64 }).notNull(),
   requestIpHash: varchar("request_ip_hash", { length: 64 }).notNull(),
   tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),

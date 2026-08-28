@@ -1,6 +1,8 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "./auth";
+import { rejectCrossOriginMutation } from "./requestSecurity";
+import type { NextRequest } from "next/server";
 
 export interface AuthorizedContext {
   accessToken: string;
@@ -21,11 +23,15 @@ export type RequireRoleResult =
  * itself (FGAP v2 + the delegated-admin-guard SPI) when we call the Admin
  * REST API with the caller's own access token.
  */
-export async function requireRole(role: string): Promise<RequireRoleResult> {
-  return requireAnyRole([role]);
+export async function requireRole(role: string, req?: NextRequest): Promise<RequireRoleResult> {
+  return requireAnyRole([role], req);
 }
 
-export async function requireAnyRole(roles: string[]): Promise<RequireRoleResult> {
+export async function requireAnyRole(roles: string[], req?: NextRequest): Promise<RequireRoleResult> {
+  if (req) {
+    const originError = rejectCrossOriginMutation(req);
+    if (originError) return { ok: false, response: originError };
+  }
   const session = await getServerSession(authOptions);
 
   if (!session || !session.accessToken) {
@@ -64,7 +70,11 @@ export async function requireAnyRole(roles: string[]): Promise<RequireRoleResult
   };
 }
 
-export async function requireRealmAdmin(): Promise<RequireRoleResult> {
+export async function requireRealmAdmin(req?: NextRequest): Promise<RequireRoleResult> {
+  if (req) {
+    const originError = rejectCrossOriginMutation(req);
+    if (originError) return { ok: false, response: originError };
+  }
   const session = await getServerSession(authOptions);
   if (!session?.accessToken) {
     return { ok: false, response: NextResponse.json({ error: "Not authenticated" }, { status: 401 }) };

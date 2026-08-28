@@ -16,7 +16,7 @@ function generatePassword(): string {
 }
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
-  const auth = await requireRole(config.userManagerRole);
+  const auth = await requireRole(config.userManagerRole, req);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;

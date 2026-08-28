@@ -19,7 +19,7 @@ interface RouteParams {
  * purely to return a clear, early error instead of a raw Keycloak 403.
  */
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
-  const auth = await requireRole(config.delegatedClientAdminRole);
+  const auth = await requireRole(config.delegatedClientAdminRole, req);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
@@ -52,8 +52,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: RouteParams) {
-  const auth = await requireRole(config.delegatedClientAdminRole);
+export async function DELETE(req: NextRequest, { params }: RouteParams) {
+  const auth = await requireRole(config.delegatedClientAdminRole, req);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;

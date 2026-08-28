@@ -10,7 +10,7 @@ const requestSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRole(config.userManagerRole);
+  const auth = await requireRole(config.userManagerRole, req);
   if (!auth.ok) return auth.response;
   const parsed = requestSchema.safeParse(await req.json());
   if (!parsed.success) {

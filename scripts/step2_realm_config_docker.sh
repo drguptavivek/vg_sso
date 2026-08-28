@@ -384,6 +384,24 @@ cat >"$profile_payload" <<'JSON'
       "multivalued": false
     },
     {
+      "name": "self_registration_pending",
+      "displayName": "Self-registration pending",
+      "permissions": {
+        "view": ["admin"],
+        "edit": ["admin"]
+      },
+      "validations": {
+        "options": {
+          "options": ["true", "false"]
+        }
+      },
+      "annotations": {
+        "inputType": "select",
+        "inputOptionsFromValidation": "options"
+      },
+      "multivalued": false
+    },
+    {
       "name": "posts",
       "displayName": "Posts",
       "multivalued": true,

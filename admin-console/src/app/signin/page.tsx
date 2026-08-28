@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { AutoKeycloakSignIn } from "./AutoKeycloakSignIn";
+import { config } from "@/lib/config";
 
 function safeCallback(value: string | undefined): string {
   return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
@@ -18,5 +19,5 @@ export default async function SignInPage({
   ]);
   const callbackUrl = safeCallback(requestedCallback);
   if (session && !session.error) redirect(callbackUrl);
-  return <AutoKeycloakSignIn callbackUrl={callbackUrl} />;
+  return <AutoKeycloakSignIn callbackUrl={callbackUrl} realmName={config.realm} />;
 }

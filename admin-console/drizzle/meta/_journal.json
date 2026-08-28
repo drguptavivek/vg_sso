@@ -15,6 +15,13 @@
       "when": 1787914239017,
       "tag": "0001_light_thundra",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787920784319,
+      "tag": "0002_empty_puff_adder",
+      "breakpoints": true
     }
   ]
 }

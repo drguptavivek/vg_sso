@@ -113,7 +113,13 @@ export const authOptions: NextAuthOptions = {
       };
     },
     async session({ session, token }) {
-      session.accessToken = token.accessToken as string | undefined;
+      // API route handlers need the caller's Keycloak token, but it must not
+      // appear in JSON returned by /api/auth/session to browser JavaScript.
+      Object.defineProperty(session, "accessToken", {
+        value: token.accessToken as string | undefined,
+        enumerable: false,
+        configurable: true,
+      });
       session.error = token.error as string | undefined;
       session.roles = (token.roles as string[] | undefined) ?? [];
       session.isRealmAdmin = token.isRealmAdmin === true;

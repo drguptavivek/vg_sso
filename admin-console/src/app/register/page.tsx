@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { RegisterClient } from "./RegisterClient";
+import { config } from "@/lib/config";
 
 export const metadata: Metadata = {
   title: "EHRMS self-registration",
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function RegisterPage() {
-  return <RegisterClient />;
+  return <RegisterClient realmName={config.realm} />;
 }

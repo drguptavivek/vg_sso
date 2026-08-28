@@ -187,7 +187,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRole(config.userManagerRole);
+  const auth = await requireRole(config.userManagerRole, req);
   if (!auth.ok) return auth.response;
 
   const body = (await req.json()) as CreateUserRequest;

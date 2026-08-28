@@ -10,6 +10,15 @@ const DEFAULT_IP_LIMIT = 10;
 const DEFAULT_EMPLOYEE_LIMIT = 5;
 const RATE_WINDOW_MINUTES = 15;
 
+interface LookupBucket {
+  count: number;
+  windowStartedAt: number;
+}
+
+const rateLimitState = globalThis as typeof globalThis & {
+  selfRegistrationLookupBuckets?: Map<string, LookupBucket>;
+};
+
 export class RegistrationRateLimitError extends Error {}
 export class RegistrationTokenError extends Error {}
 
@@ -81,6 +90,47 @@ function privacyHash(kind: string, value: string): string {
   return createHmac("sha256", registrationSecret()).update(`${kind}:${value}`).digest("hex");
 }
 
+function consumeLookupBucket(key: string, limit: number, now: number): void {
+  const buckets = rateLimitState.selfRegistrationLookupBuckets
+    ??= new Map<string, LookupBucket>();
+  const windowMs = RATE_WINDOW_MINUTES * 60_000;
+  const existing = buckets.get(key);
+  const bucket = !existing || now - existing.windowStartedAt >= windowMs
+    ? { count: 0, windowStartedAt: now }
+    : existing;
+  if (bucket.count >= limit) {
+    throw new RegistrationRateLimitError("Too many registration attempts. Please try again later.");
+  }
+  bucket.count += 1;
+  buckets.set(key, bucket);
+
+  if (buckets.size > 10_000) {
+    for (const [candidate, value] of buckets) {
+      if (now - value.windowStartedAt >= windowMs) buckets.delete(candidate);
+      if (buckets.size <= 8_000) break;
+    }
+  }
+}
+
+/** Process-local preflight throttle protects EHRMS even when the ID is invalid. */
+export function checkRegistrationLookupRateLimit(employeeId: string, headers: Headers): void {
+  const now = Date.now();
+  consumeLookupBucket(
+    `employee:${privacyHash("employee", normalizeEmployeeId(employeeId))}`,
+    positiveInteger("SELF_REGISTRATION_EMPLOYEE_RATE_LIMIT", DEFAULT_EMPLOYEE_LIMIT),
+    now,
+  );
+  consumeLookupBucket(
+    `ip:${privacyHash("ip", clientAddress(headers))}`,
+    positiveInteger("SELF_REGISTRATION_IP_RATE_LIMIT", DEFAULT_IP_LIMIT),
+    now,
+  );
+}
+
+export function isPermanentHrmsEmployee(hrms: HrmsEmployeeRecord): boolean {
+  return hrms.jobCategory?.trim().toLocaleLowerCase() === "permanent";
+}
+
 function positiveInteger(name: string, fallback: number): number {
   const parsed = Number(process.env[name] ?? fallback);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -133,7 +183,9 @@ export async function createRegistrationAttempt(
   return { token, expiresAt };
 }
 
-export async function claimRegistrationAttempt(token: string): Promise<SelfRegistrationAttempt> {
+export async function claimRegistrationAttempt(
+  token: string,
+): Promise<SelfRegistrationAttempt & { employeeId: string }> {
   const [attempt] = await adminDatabase()
     .update(selfRegistrationAttempts)
     .set({ status: "processing", updatedAt: new Date() })
@@ -147,7 +199,10 @@ export async function claimRegistrationAttempt(token: string): Promise<SelfRegis
   if (!attempt) {
     throw new RegistrationTokenError("This registration confirmation has expired or was already used.");
   }
-  return attempt;
+  if (!attempt.employeeId) {
+    throw new RegistrationTokenError("This registration confirmation no longer contains an employee ID.");
+  }
+  return attempt as SelfRegistrationAttempt & { employeeId: string };
 }
 
 export async function finishRegistrationAttempt(
@@ -159,6 +214,7 @@ export async function finishRegistrationAttempt(
   await adminDatabase()
     .update(selfRegistrationAttempts)
     .set({
+      employeeId: null,
       status,
       resultCode,
       keycloakUserId: keycloakUserId ?? null,
