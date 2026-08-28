@@ -8,6 +8,9 @@ export interface KcUser {
   emailVerified?: boolean;
   attributes?: Record<string, string[]>;
   createdTimestamp?: number;
+  adminAccess?: string[];
+  mfaConfigured?: boolean;
+  mfaCredentialTypes?: string[];
 }
 
 export interface KcGroup {

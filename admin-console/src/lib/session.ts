@@ -21,6 +21,10 @@ export type RequireRoleResult =
  * REST API with the caller's own access token.
  */
 export async function requireRole(role: string): Promise<RequireRoleResult> {
+  return requireAnyRole([role]);
+}
+
+export async function requireAnyRole(roles: string[]): Promise<RequireRoleResult> {
   const session = await getServerSession(authOptions);
 
   if (!session || !session.accessToken) {
@@ -37,10 +41,13 @@ export async function requireRole(role: string): Promise<RequireRoleResult> {
     };
   }
 
-  if (!session.isRealmAdmin && !session.roles?.includes(role)) {
+  if (!session.isRealmAdmin && !roles.some((role) => session.roles?.includes(role))) {
     return {
       ok: false,
-      response: NextResponse.json({ error: `Missing required role: ${role}` }, { status: 403 }),
+      response: NextResponse.json(
+        { error: `Missing one of the required roles: ${roles.join(", ")}` },
+        { status: 403 },
+      ),
     };
   }
 

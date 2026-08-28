@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   devIndicators: false,
+  allowedDevOrigins: ["sso1admin.aiims.edu.in"],
   output: "standalone",
 };
 

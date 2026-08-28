@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/session";
+import { requireAnyRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
@@ -24,22 +24,35 @@ async function fetchChildrenTree(accessToken: string, group: KcGroup): Promise<G
 }
 
 export async function GET() {
-  const auth = await requireRole(config.delegatedClientAdminRole);
+  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole]);
   if (!auth.ok) return auth.response;
 
   try {
-    const ownedRootPaths = await getOwnedRootPaths(auth.ctx.accessToken, auth.ctx.userId, auth.ctx.isRealmAdmin);
-    if (ownedRootPaths.length === 0) {
-      return NextResponse.json({ roots: [] });
+    const hasRealmWideAccess = auth.ctx.isRealmAdmin || auth.ctx.roles.includes(config.userManagerRole);
+    const appRolesPath = "/" + config.appRolesGroupName;
+    let realmGroups: GroupTreeNode[] = [];
+    if (hasRealmWideAccess) {
+      const { data: topLevelGroups } = await kcAdminRequest<KcGroup[]>(auth.ctx.accessToken, "/groups", {
+        query: { briefRepresentation: "true", max: "1000" },
+      });
+      realmGroups = await Promise.all(
+        (topLevelGroups ?? [])
+          .filter((group) => group.path !== appRolesPath)
+          .map((group) => fetchChildrenTree(auth.ctx.accessToken, group)),
+      );
     }
 
-    const appRolesPath = "/" + config.appRolesGroupName;
+    const ownedRootPaths = await getOwnedRootPaths(auth.ctx.accessToken, auth.ctx.userId, hasRealmWideAccess);
+    if (ownedRootPaths.length === 0) {
+      return NextResponse.json({ roots: [], realmGroups });
+    }
+
     const { data: matches } = await kcAdminRequest<KcGroup[]>(auth.ctx.accessToken, "/groups", {
       query: { search: config.appRolesGroupName, briefRepresentation: "true", max: "500" },
     });
     const appRoles = (matches ?? []).find((group) => group.path === appRolesPath);
     if (!appRoles?.id) {
-      return NextResponse.json({ roots: [] });
+      return NextResponse.json({ roots: [], realmGroups });
     }
 
     const { data: appRoots } = await kcAdminRequest<KcGroup[]>(
@@ -49,16 +62,6 @@ export async function GET() {
     );
     const rootGroups = (appRoots ?? []).filter((group) => ownedRootPaths.includes(group.path));
     const roots = await Promise.all(rootGroups.map((g) => fetchChildrenTree(auth.ctx.accessToken, g)));
-
-    let realmGroups: GroupTreeNode[] = [];
-    if (auth.ctx.isRealmAdmin) {
-      const { data: topLevelGroups } = await kcAdminRequest<KcGroup[]>(auth.ctx.accessToken, "/groups", {
-        query: { briefRepresentation: "true", max: "1000" },
-      });
-      realmGroups = (topLevelGroups ?? [])
-        .filter((group) => group.path !== appRolesPath)
-        .map((group) => ({ ...group, children: [] }));
-    }
 
     return NextResponse.json({ roots, realmGroups });
   } catch (err) {

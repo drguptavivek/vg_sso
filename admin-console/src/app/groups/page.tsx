@@ -7,17 +7,21 @@ import GroupsDashboardClient from "./GroupsDashboardClient";
 export default async function GroupsPage() {
   const session = await getServerSession(authOptions);
   if (!session) {
-    redirect("/api/auth/signin");
+    redirect("/signin?callbackUrl=%2Fgroups");
   }
-  if (!session.isRealmAdmin && !session.roles?.includes(config.delegatedClientAdminRole)) {
+  const isUserManager = session.roles?.includes(config.userManagerRole) ?? false;
+  const isDelegatedAdmin = session.roles?.includes(config.delegatedClientAdminRole) ?? false;
+  if (!session.isRealmAdmin && !isUserManager && !isDelegatedAdmin) {
     redirect("/");
   }
 
   return (
     <GroupsDashboardClient
       username={session.user?.name ?? session.userId ?? "unknown"}
-      showHrLink={session.isRealmAdmin}
+      showHrLink={session.isRealmAdmin || isUserManager}
       isRealmAdmin={session.isRealmAdmin}
+      isUserManager={isUserManager}
+      canManageApplicationRoles={session.isRealmAdmin || isDelegatedAdmin}
     />
   );
 }

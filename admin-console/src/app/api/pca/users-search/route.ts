@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "@/lib/session";
+import { requireAnyRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
 import type { KcUser } from "@/types/keycloak";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireRole(config.delegatedClientAdminRole);
+  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole]);
   if (!auth.ok) return auth.response;
 
   const rawSearch = req.nextUrl.searchParams.get("search")?.trim() ?? "";

@@ -6,7 +6,7 @@ const DELEGATED_CLIENT_ADMIN_ROLE =
   process.env.ADMIN_CONSOLE_DELEGATED_CLIENT_ADMIN_ROLE ?? "delegated-client-admin-base";
 
 export default withAuth(
-  function middleware() {
+  function proxy() {
     return NextResponse.next();
   },
   {
@@ -22,7 +22,7 @@ export default withAuth(
           return isRealmAdmin || roles.includes(USER_MANAGER_ROLE);
         }
         if (path.startsWith("/groups")) {
-          return isRealmAdmin || roles.includes(DELEGATED_CLIENT_ADMIN_ROLE);
+          return isRealmAdmin || roles.includes(USER_MANAGER_ROLE) || roles.includes(DELEGATED_CLIENT_ADMIN_ROLE);
         }
         return true;
       },

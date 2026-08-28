@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "@/lib/session";
+import { requireAnyRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
@@ -11,7 +11,7 @@ interface RouteParams {
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
-  const auth = await requireRole(config.delegatedClientAdminRole);
+  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole]);
   if (!auth.ok) return auth.response;
 
   const { id, userId } = await params;
@@ -19,13 +19,21 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   try {
     const [current, ownedRootPaths] = await Promise.all([
       kcAdminRequest<KcGroup>(auth.ctx.accessToken, `/groups/${id}`),
-      getOwnedRootPaths(auth.ctx.accessToken, auth.ctx.userId, auth.ctx.isRealmAdmin),
+      getOwnedRootPaths(
+        auth.ctx.accessToken,
+        auth.ctx.userId,
+        auth.ctx.isRealmAdmin || auth.ctx.roles.includes(config.userManagerRole),
+      ),
     ]);
     const group = current.data;
     if (!group) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
-    if (!isWithinOwnedTree(group.path, ownedRootPaths)) {
+    if (
+      !auth.ctx.isRealmAdmin &&
+      !auth.ctx.roles.includes(config.userManagerRole) &&
+      !isWithinOwnedTree(group.path, ownedRootPaths)
+    ) {
       return NextResponse.json(
         { error: "You may only manage membership inside your own AppRoles subtree" },
         { status: 403 },

@@ -40,6 +40,7 @@ async function refreshAccessToken(refreshToken: string): Promise<RefreshedTokens
 export const authOptions: NextAuthOptions = {
   secret: config.nextAuthSecret,
   session: { strategy: "jwt" },
+  pages: { signIn: "/signin" },
   providers: [
     {
       id: "keycloak",

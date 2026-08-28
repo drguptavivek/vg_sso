@@ -7,7 +7,7 @@ import HrDashboardClient from "./HrDashboardClient";
 export default async function HrPage() {
   const session = await getServerSession(authOptions);
   if (!session) {
-    redirect("/api/auth/signin");
+    redirect("/signin?callbackUrl=%2Fhr");
   }
   if (!session.isRealmAdmin && !session.roles?.includes(config.userManagerRole)) {
     redirect("/");
@@ -16,7 +16,7 @@ export default async function HrPage() {
   return (
     <HrDashboardClient
       username={session.user?.name ?? session.userId ?? "unknown"}
-      showGroupsLink={session.isRealmAdmin}
+      showGroupsLink
     />
   );
 }
