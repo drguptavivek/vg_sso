@@ -3,7 +3,7 @@ import { requireRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
-import { adminAccessForUser, mfaCredentialTypesForUser } from "@/lib/adminAccess";
+import { adminAccessForUser, hasRealmAdminAccess, mfaCredentialTypesForUser } from "@/lib/adminAccess";
 import { USER_PROFILE_ATTRIBUTE_FIELDS, USER_PROFILE_FIELDS } from "@/lib/userProfileFields";
 import type { KcUser } from "@/types/keycloak";
 
@@ -54,6 +54,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     attributes?: Record<string, string[]>;
   };
 
+  if (body.enabled !== undefined && typeof body.enabled !== "boolean") {
+    return NextResponse.json({ error: "enabled must be a boolean" }, { status: 400 });
+  }
+
   const submittedAttributes = body.attributes ?? {};
   const unsupported = Object.keys(submittedAttributes).filter(
     (name) => !USER_PROFILE_ATTRIBUTE_FIELDS.has(name),
@@ -94,6 +98,18 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     const { data: current } = await kcAdminRequest<KcUser>(auth.ctx.accessToken, `/users/${id}`);
     if (!current) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (body.enabled === false) {
+      if (id === auth.ctx.userId) {
+        return NextResponse.json({ error: "You cannot disable your own account" }, { status: 403 });
+      }
+      if (!auth.ctx.isRealmAdmin && await hasRealmAdminAccess(auth.ctx.accessToken, id)) {
+        return NextResponse.json(
+          { error: "Only a realm administrator may disable another realm administrator" },
+          { status: 403 },
+        );
+      }
     }
 
     const attributes = { ...(current.attributes ?? {}) };

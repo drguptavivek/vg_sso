@@ -123,9 +123,13 @@ interface BrowserSecurityStatus {
 
 export default function HrDashboardClient({
   username,
+  currentUserId,
+  isRealmAdmin,
   showGroupsLink = false,
 }: {
   username: string;
+  currentUserId: string;
+  isRealmAdmin: boolean;
   showGroupsLink?: boolean;
 }) {
   const [search, setSearch] = useState("");
@@ -224,7 +228,17 @@ export default function HrDashboardClient({
     filterGroup?.id,
   ].filter(Boolean).length;
 
+  const cannotDisable = useCallback((user: KcUser) => (
+    user.id === currentUserId || (!isRealmAdmin && user.adminAccess?.includes("realm-admin") === true)
+  ), [currentUserId, isRealmAdmin]);
+
   async function toggleEnabled(user: KcUser) {
+    if (user.enabled && cannotDisable(user)) {
+      toast.error(user.id === currentUserId
+        ? "You cannot disable your own account."
+        : "Only a realm administrator may disable another realm administrator.");
+      return;
+    }
     try {
       await api(`/api/hr/users/${user.id}`, {
         method: "PATCH",
@@ -263,6 +277,15 @@ export default function HrDashboardClient({
   async function runBatch(action: "enable" | "disable" | "onboarding") {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
+    if (action === "disable") {
+      const protectedUser = users.find((user) => selectedIds.has(user.id) && cannotDisable(user));
+      if (protectedUser) {
+        toast.error(protectedUser.id === currentUserId
+          ? "Your selection includes your own account, which you cannot disable."
+          : "Your selection includes a realm administrator that only another realm administrator may disable.");
+        return;
+      }
+    }
     const label = action === "enable" ? "enable" : action === "disable" ? "disable" : "resend onboarding to";
     if (!window.confirm(`Are you sure you want to ${label} ${ids.length} selected user${ids.length === 1 ? "" : "s"}?`)) {
       return;
@@ -537,7 +560,7 @@ export default function HrDashboardClient({
                           <MfaCredentialIndicator user={listedUser} />
                           <Badge variant={listedUser.enabled ? "success" : "secondary"}
                             className="h-5 px-1.5 text-[10px]">
-                            {listedUser.enabled ? "Active" : "Disabled"}
+                            {listedUser.enabled ? "Enabled" : "Disabled"}
                           </Badge>
                         </div>
                       </div>
@@ -608,6 +631,7 @@ export default function HrDashboardClient({
               onResetPassword={setResetPasswordFor}
               onResendOnboarding={resendOnboarding}
               onManageGroups={setManageGroupsFor}
+              cannotDisable={cannotDisable(selectedUser)}
             />
           ) : (
             <Card>
@@ -675,6 +699,7 @@ function UserProfilePanel({
   onResetPassword,
   onResendOnboarding,
   onManageGroups,
+  cannotDisable,
 }: {
   user: KcUser;
   onEdit: (user: KcUser) => void;
@@ -682,6 +707,7 @@ function UserProfilePanel({
   onResetPassword: (user: KcUser) => void;
   onResendOnboarding: (user: KcUser) => void;
   onManageGroups: (user: KcUser) => void;
+  cannotDisable: boolean;
 }) {
   const [detail, setDetail] = useState<KcUser | null>(null);
   const [groups, setGroups] = useState<KcGroup[]>([]);
@@ -718,7 +744,12 @@ function UserProfilePanel({
           <Badge variant={displayed.enabled ? "success" : "secondary"}>
             {displayed.enabled ? "Enabled" : "Disabled"}
           </Badge>
-          <Button size="sm" variant="outline" onClick={() => onToggleEnabled(displayed)}>
+          <Button size="sm" variant="outline"
+            disabled={displayed.enabled && cannotDisable}
+            title={displayed.enabled && cannotDisable
+              ? "Self-disable is blocked, and only realm administrators may disable another realm administrator."
+              : undefined}
+            onClick={() => onToggleEnabled(displayed)}>
             {displayed.enabled ? "Disable" : "Enable"}
           </Button>
           <Button size="sm" variant="outline" onClick={() => onResetPassword(displayed)}>Reset password</Button>

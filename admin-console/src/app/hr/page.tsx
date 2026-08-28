@@ -16,6 +16,8 @@ export default async function HrPage() {
   return (
     <HrDashboardClient
       username={session.user?.name ?? session.userId ?? "unknown"}
+      currentUserId={session.userId ?? ""}
+      isRealmAdmin={session.isRealmAdmin}
       showGroupsLink
     />
   );

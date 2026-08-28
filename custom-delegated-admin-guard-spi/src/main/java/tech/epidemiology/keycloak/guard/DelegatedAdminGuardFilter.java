@@ -1,5 +1,7 @@
 package tech.epidemiology.keycloak.guard;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Priority;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.container.ContainerRequestContext;
@@ -53,6 +55,12 @@ import java.util.stream.Collectors;
 public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
 
     private static final Logger LOG = Logger.getLogger(DelegatedAdminGuardFilter.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    // PUT /admin/realms/{realm}/users/{userId}; group(1) is the target UUID.
+    private static final Pattern USER_ROOT_PATH = Pattern.compile(
+        "^/admin/realms/[^/]+/users/([^/]+)$"
+    );
 
     // /admin/realms/{realm}/clients/{uuid}[/anything...]
     // group(1) = UUID, group(2) = sub-resource path (null for client root).
@@ -154,6 +162,8 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
         boolean isRolePcaBaseMutationPath = isMutate && ROLE_PCA_BASE_PATH.matcher(path).matches();
         java.util.regex.Matcher roleByIdMatcher = ROLE_BY_ID_PATH.matcher(path);
         boolean isRoleByIdPath = isMutate && roleByIdMatcher.matches();
+        java.util.regex.Matcher userRootMatcher = USER_ROOT_PATH.matcher(path);
+        boolean isUserRootUpdate = "PUT".equals(methodUpper) && userRootMatcher.matches();
 
         // Resolve the authenticated user from the bearer token
         RealmModel realm = session.getContext().getRealm();
@@ -173,6 +183,32 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
         }
 
         UserModel actor = authResult.getUser();
+
+        // Global safety for user disable operations. Keycloak represents
+        // disable as an ordinary user update, so the broad Users/manage
+        // scope cannot express either of these target-aware restrictions.
+        if (isUserRootUpdate && payloadDisablesUser(ctx)) {
+            String targetUserId = userRootMatcher.group(1);
+            UserModel target = session.users().getUserById(realm, targetUserId);
+            if (target != null && actor.getId().equals(target.getId())) {
+                LOG.warnf(
+                    "DELEGATED_ADMIN_GUARD_FILTER: Blocking self-disable — user=%s realm=%s",
+                    actor.getUsername(), realm.getName()
+                );
+                ctx.abortWith(forbidden("Administrators cannot disable their own account."));
+                return;
+            }
+            if (target != null && hasRealmAdminRole(realm, target) && !hasRealmAdminRole(realm, actor)) {
+                LOG.warnf(
+                    "DELEGATED_ADMIN_GUARD_FILTER: Blocking realm-admin disable — actor=%s target=%s realm=%s",
+                    actor.getUsername(), target.getUsername(), realm.getName()
+                );
+                ctx.abortWith(forbidden(
+                    "Only a realm administrator may disable another realm administrator."
+                ));
+                return;
+            }
+        }
 
         boolean isClientManager = hasClientManagerRoleOnly(realm, actor);
         boolean hasPcaBase = hasPcaBaseRole(realm, actor);
@@ -420,6 +456,28 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
         }
         RoleModel pcaBaseRole = realm.getRole(DelegatedAdminGuardEventListener.PCA_BASE_ROLE_NAME);
         return pcaBaseRole != null && body.contains(pcaBaseRole.getId());
+    }
+
+    private boolean payloadDisablesUser(ContainerRequestContext ctx) throws IOException {
+        if (ctx.getEntityStream() == null) return false;
+        byte[] bytes = ctx.getEntityStream().readAllBytes();
+        ctx.setEntityStream(new ByteArrayInputStream(bytes));
+        if (bytes.length == 0) return false;
+        try {
+            JsonNode body = OBJECT_MAPPER.readTree(bytes);
+            JsonNode enabled = body.get("enabled");
+            return enabled != null && enabled.isBoolean() && !enabled.booleanValue();
+        } catch (RuntimeException e) {
+            // Let the Keycloak request handler report malformed JSON.
+            return false;
+        }
+    }
+
+    private boolean hasRealmAdminRole(RealmModel realm, UserModel user) {
+        ClientModel realmManagement = realm.getClientByClientId("realm-management");
+        if (realmManagement == null) return false;
+        RoleModel realmAdmin = realmManagement.getRole("realm-admin");
+        return realmAdmin != null && user.hasRole(realmAdmin);
     }
 
     private Set<String> getOwnedAppGroupIds(UserModel user, GroupModel appRolesRoot) {

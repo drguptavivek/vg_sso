@@ -15,6 +15,16 @@ interface KcRoleMappings {
   clientMappings?: Record<string, KcClientRoleMapping>;
 }
 
+export async function hasRealmAdminAccess(accessToken: string, userId: string): Promise<boolean> {
+  const { data: mappings } = await kcAdminRequest<KcRoleMappings>(
+    accessToken,
+    `/users/${userId}/role-mappings`,
+  );
+  const realmManagement = Object.values(mappings?.clientMappings ?? {})
+    .find((mapping) => mapping.client === "realm-management");
+  return realmManagement?.mappings?.some((role) => role.name === "realm-admin") ?? false;
+}
+
 const accessCache = new Map<string, { expires: number; values: string[] }>();
 const mfaCache = new Map<string, { expires: number; types: string[] }>();
 const CACHE_MS = 30_000;

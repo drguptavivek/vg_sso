@@ -16,7 +16,7 @@ filters are collapsed by default and include an inclusive account-expiry date
 range, exact Employee ID, OTP phone-verification state, account status, any
 group, the subgroups beneath `/User Type`, and administrative access. User Type
 membership is also shown separately in the profile panel. Checkboxes drive
-bulk enable, disable, and onboarding-email resend actions.
+bulk enable, disable, and onboarding-email resend actions. Self-disable is blocked, and only a realm administrator may disable another realm administrator. The Next.js API and UI mirror this rule for immediate feedback, while `DelegatedAdminGuardFilter` remains authoritative for every Admin REST client. The directory uses **Enabled** rather than **Active** so temporary brute-force lockout is not confused with the persistent `user.enabled` state.
 
 Administrative access is prominent in both the directory cards and profile:
 `client-manager` and `user-manager` realm roles, the

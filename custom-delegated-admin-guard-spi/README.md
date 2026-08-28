@@ -48,6 +48,8 @@ For delegated users, the filter blocks or narrows operations that FGAP cannot sa
 - mutating `AppRoles` outside owned app subtrees
 - tampering with protected `delegated-client-admin-base` mappings
 
+For every Admin REST caller, including full realm administrators, the filter also blocks self-disable. A non-realm-admin cannot disable a user holding `realm-management -> realm-admin`; a realm administrator may disable a different realm administrator. These checks inspect `PUT /users/{id}` requests containing `enabled=false`.
+
 Full realm administrators are not restricted by these delegated-admin rules, but their client creation still receives the AppRoles group bootstrap described above.
 
 ## Development Reload
