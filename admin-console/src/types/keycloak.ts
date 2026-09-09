@@ -18,6 +18,7 @@ export interface KcGroup {
   name: string;
   path: string;
   parentId?: string;
+  attributes?: Record<string, string[]>;
   subGroupCount?: number;
   subGroups?: KcGroup[];
 }

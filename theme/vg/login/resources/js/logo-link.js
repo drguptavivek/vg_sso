@@ -19,6 +19,29 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
+
+  if (!document.querySelector(".vg-login-cancel")) {
+    var redirectUri = params.get("redirect_uri");
+    var loginButton = document.getElementById("kc-login");
+    if (redirectUri && loginButton) {
+      try {
+        var returnUrl = new URL(redirectUri);
+        if (returnUrl.protocol === "https:" || returnUrl.protocol === "http:") {
+          var cancel = document.createElement("div");
+          var cancelLink = document.createElement("a");
+          cancel.className = "vg-login-cancel";
+          cancelLink.href = returnUrl.href;
+          cancelLink.textContent = "Back to application";
+          cancelLink.tabIndex = 8;
+          cancel.appendChild(cancelLink);
+          loginButton.closest("#kc-form-buttons").insertAdjacentElement("afterend", cancel);
+        }
+      } catch (_err) {
+        // Ignore malformed redirect_uri values; Keycloak will validate the request.
+      }
+    }
+  }
+
   if (!logo) return;
 
   // Keycloak login URLs include the realm in the path:

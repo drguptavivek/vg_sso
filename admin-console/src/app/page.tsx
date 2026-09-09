@@ -37,6 +37,9 @@ export default async function HomePage() {
   if (roles.includes(config.userManagerRole)) {
     redirect("/hr");
   }
+  if (roles.includes(config.groupManagerRole)) {
+    redirect("/groups");
+  }
   if (roles.includes(config.delegatedClientAdminRole)) {
     redirect("/groups");
   }
@@ -52,7 +55,7 @@ export default async function HomePage() {
           <p>
             Signed in as <strong>{session.user?.name ?? session.userId}</strong>, but this account has
             neither the <code className="rounded bg-muted px-1 py-0.5">{config.userManagerRole}</code> nor
-            the{" "}
+            the <code className="rounded bg-muted px-1 py-0.5">{config.groupManagerRole}</code> nor the
             <code className="rounded bg-muted px-1 py-0.5">{config.delegatedClientAdminRole}</code> realm
             role.
           </p>

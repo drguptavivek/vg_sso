@@ -55,7 +55,7 @@ Additional scoped permissions are granted via `admin-permissions` client Authori
 | Resource | Scopes granted | Permission name |
 |---|---|---|
 | `Users` | `view`, `manage`, `manage-group-membership` | `perm-users-user-manager` |
-| `Groups` | `view`, `view-members`, `manage-membership` | `perm-groups-user-manager-readonly` |
+| `Groups` | `view`, `view-members`, `manage-membership`, `manage-members` | `perm-groups-user-manager-readonly` |
 
 **Policy:** `policy-user-manager` (role policy, POSITIVE logic, requires `user-manager` role)
 

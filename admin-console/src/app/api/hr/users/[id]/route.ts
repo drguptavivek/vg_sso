@@ -9,6 +9,7 @@ import { extensionForUser, upsertUserExtension } from "@/db/userExtensions";
 import { recordAdminAction } from "@/db/actionLog";
 import { fetchHrmsEmployee } from "@/lib/hrms/client";
 import { extensionFromHrms } from "@/lib/hrms/mapping";
+import { normalizeEmail } from "@/lib/selfRegistration";
 import type { KcUser } from "@/types/keycloak";
 
 interface RouteParams {
@@ -64,6 +65,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   if (body.enabled !== undefined && typeof body.enabled !== "boolean") {
     return NextResponse.json({ error: "enabled must be a boolean" }, { status: 400 });
   }
+  const email = body.email === undefined ? undefined : normalizeEmail(body.email);
 
   const submittedAttributes = body.attributes ?? {};
   const unsupported = Object.keys(submittedAttributes).filter(
@@ -79,7 +81,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   for (const field of USER_PROFILE_FIELDS) {
     const values =
       field.source === "core"
-        ? [String(body[field.name as keyof typeof body] ?? "")]
+        ? [field.name === "email" ? (email ?? "") : String(body[field.name as keyof typeof body] ?? "")]
         : submittedAttributes[field.name];
     if (!values) continue;
     if (!field.multivalued && values.length > 1) {
@@ -148,7 +150,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       username: body.username ?? current.username,
       firstName: body.firstName ?? current.firstName,
       lastName: body.lastName ?? current.lastName,
-      email: body.email ?? current.email,
+      email: email ?? current.email,
       attributes,
     };
 

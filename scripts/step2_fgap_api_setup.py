@@ -55,6 +55,53 @@ def get_role_id(keycloak_url, token, target_realm, role_name):
     response.raise_for_status()
     return response.json()['id']
 
+def ensure_realm_role(keycloak_url, token, target_realm, role_name, description):
+    url = f"{keycloak_url}/admin/realms/{target_realm}/roles/{role_name}"
+    headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+    payload = {"name": role_name, "description": description}
+    response = requests.get(url, headers=headers, verify=False)
+    if response.status_code == 404:
+        note(f"Creating realm role '{role_name}'")
+        create_url = f"{keycloak_url}/admin/realms/{target_realm}/roles"
+        create_response = requests.post(create_url, headers=headers, json=payload, verify=False)
+        create_response.raise_for_status()
+    else:
+        response.raise_for_status()
+        note(f"Updating realm role '{role_name}'")
+        update_response = requests.put(url, headers=headers, json={**response.json(), **payload}, verify=False)
+        update_response.raise_for_status()
+    return get_role_id(keycloak_url, token, target_realm, role_name)
+
+def get_client_by_client_id(keycloak_url, token, target_realm, client_id):
+    url = f"{keycloak_url}/admin/realms/{target_realm}/clients"
+    headers = {'Authorization': f'Bearer {token}'}
+    response = requests.get(url, headers=headers, params={'clientId': client_id}, verify=False)
+    response.raise_for_status()
+    clients = response.json()
+    if not clients:
+        raise ValueError(f"Client {client_id} not found")
+    return clients[0]
+
+def get_client_role_representation(keycloak_url, token, target_realm, client_id, role_name):
+    client = get_client_by_client_id(keycloak_url, token, target_realm, client_id)
+    url = f"{keycloak_url}/admin/realms/{target_realm}/clients/{client['id']}/roles/{role_name}"
+    headers = {'Authorization': f'Bearer {token}'}
+    response = requests.get(url, headers=headers, verify=False)
+    response.raise_for_status()
+    return response.json()
+
+def ensure_realm_role_composites(keycloak_url, token, target_realm, realm_role_name, client_id, client_role_names):
+    headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+    role_id = get_role_id(keycloak_url, token, target_realm, realm_role_name)
+    composites = [
+        get_client_role_representation(keycloak_url, token, target_realm, client_id, role_name)
+        for role_name in client_role_names
+    ]
+    url = f"{keycloak_url}/admin/realms/{target_realm}/roles-by-id/{role_id}/composites"
+    note(f"Ensuring composites on '{realm_role_name}': {', '.join(client_role_names)}")
+    response = requests.post(url, headers=headers, json=composites, verify=False)
+    response.raise_for_status()
+
 def enable_admin_permissions(keycloak_url, token, target_realm):
     url = f"{keycloak_url}/admin/realms/{target_realm}"
     headers = {'Authorization': f'Bearer {token}'}
@@ -72,29 +119,36 @@ def enable_admin_permissions(keycloak_url, token, target_realm):
 def create_role_policy(keycloak_url, token, target_realm, mgmt_client_id, policy_name, role_id):
     url = f"{keycloak_url}/admin/realms/{target_realm}/clients/{mgmt_client_id}/authz/resource-server/policy/role"
     headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
-    
-    # Check if policy exists
-    search_res = requests.get(url, headers=headers, params={'name': policy_name}, verify=False)
-    search_res.raise_for_status()
-    existing = search_res.json()
-    if existing:
-        note(f"Role policy '{policy_name}' already exists.")
-        return existing[0]['id']
-
     payload = {
         "name": policy_name,
-        "description": "Fine grained user and group permissions for user-manager role",
+        "description": f"Fine grained admin permissions for {policy_name}",
         "type": "role",
         "logic": "POSITIVE",
         "decisionStrategy": "UNANIMOUS",
         "roles": [{"id": role_id, "required": True}],
         "fetchRoles": True
     }
+
+    search_res = requests.get(url, headers=headers, params={'name': policy_name}, verify=False)
+    search_res.raise_for_status()
+    existing = search_res.json()
+    if existing:
+        policy_id = existing[0]['id']
+        note(f"Updating role policy '{policy_name}'...")
+        update_payload = {**payload, "id": policy_id}
+        response = requests.put(f"{url}/{policy_id}", headers=headers, json=update_payload, verify=False)
+        response.raise_for_status()
+        return policy_id
+
     note(f"Creating role policy '{policy_name}'...")
     response = requests.post(url, headers=headers, json=payload, verify=False)
-    if response.status_code == 409: # Conflict
-         note(f"Policy '{policy_name}' exists (conflict).")
-         return search_res.json()[0]['id'] if existing else None
+    if response.status_code == 409:
+         note(f"Policy '{policy_name}' exists (conflict); resolving existing policy.")
+         retry = requests.get(url, headers=headers, params={'name': policy_name}, verify=False)
+         retry.raise_for_status()
+         matches = retry.json()
+         if matches:
+             return matches[0]['id']
     response.raise_for_status()
     return response.json()['id']
 
@@ -111,16 +165,8 @@ def get_scope_id(keycloak_url, token, target_realm, mgmt_client_id, scope_name):
 
 def create_scope_permission(keycloak_url, token, target_realm, mgmt_client_id, perm_name, description, resource_type, scope_names, policy_ids):
     url = f"{keycloak_url}/admin/realms/{target_realm}/clients/{mgmt_client_id}/authz/resource-server/permission/scope"
-    headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
-    
-    # Check if permission exists
-    search_res = requests.get(url, headers=headers, params={'name': perm_name}, verify=False)
-    search_res.raise_for_status()
-    if search_res.json():
-        note(f"Scope permission '{perm_name}' already exists.")
-        return search_res.json()[0]['id']
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-    # Resolve scopes
     scope_ids = []
     for sname in scope_names:
         note(f"Resolving authz scope '{sname}' for permission '{perm_name}'")
@@ -138,13 +184,27 @@ def create_scope_permission(keycloak_url, token, target_realm, mgmt_client_id, p
         "scopes": scope_ids
     }
 
+    search_res = requests.get(url, headers=headers, params={"name": perm_name}, verify=False)
+    search_res.raise_for_status()
+    existing = search_res.json()
+    if existing:
+        permission_id = existing[0]["id"]
+        note(f"Updating scope permission '{perm_name}'...")
+        policy_url = f"{keycloak_url}/admin/realms/{target_realm}/clients/{mgmt_client_id}/authz/resource-server/policy"
+        policy_names = []
+        for policy_id in policy_ids:
+            policy_res = requests.get(f"{policy_url}/{policy_id}", headers=headers, verify=False)
+            policy_res.raise_for_status()
+            policy_names.append(policy_res.json()["name"])
+        update_payload = {**payload, "policies": policy_names, "scopes": scope_names}
+        response = requests.put(f"{url}/{permission_id}", headers=headers, json=update_payload, verify=False)
+        response.raise_for_status()
+        return permission_id
+
     note(f"Creating scope permission '{perm_name}'...")
     response = requests.post(url, headers=headers, json=payload, verify=False)
-    if response.status_code == 409:
-         note(f"Permission '{perm_name}' exists (conflict).")
-         return search_res.json()[0]['id']
     response.raise_for_status()
-    return response.json()['id']
+    return response.json()["id"]
 
 def main():
     parser = argparse.ArgumentParser(description="Configure FGAPv2 for Keycloak 26 via Authz API")
@@ -181,14 +241,40 @@ def main():
     user_manager_role_id = get_role_id(args.url, token, args.realm, 'user-manager')
     note(f"Found 'user-manager' role ID: {user_manager_role_id}")
 
-    # 3. Create the Role Policy
+    note("Ensuring group-manager-fgap role")
+    group_manager_role_id = ensure_realm_role(
+        args.url,
+        token,
+        args.realm,
+        'group-manager-fgap',
+        'Manage realm groups except protected AppRoles administrator roots'
+    )
+    ensure_realm_role_composites(
+        args.url,
+        token,
+        args.realm,
+        'group-manager-fgap',
+        'realm-management',
+        ['query-groups', 'query-users', 'view-users']
+    )
+    note(f"Found 'group-manager-fgap' role ID: {group_manager_role_id}")
+
+    # 3. Create the Role Policies
     note("Ensuring role policy for user-manager")
     policy_id = create_role_policy(
-        args.url, token, args.realm, mgmt_client_id, 
-        policy_name="policy-user-manager", 
+        args.url, token, args.realm, mgmt_client_id,
+        policy_name="policy-user-manager",
         role_id=user_manager_role_id
     )
     note(f"Role policy ID: {policy_id}")
+
+    note("Ensuring role policy for group-manager-fgap")
+    group_manager_policy_id = create_role_policy(
+        args.url, token, args.realm, mgmt_client_id,
+        policy_name="policy-group-manager-fgap",
+        role_id=group_manager_role_id
+    )
+    note(f"Group manager role policy ID: {group_manager_policy_id}")
 
     # 4. Create User Permission
     note("Ensuring Users scope permission")
@@ -213,12 +299,40 @@ def main():
         target_realm=args.realm,
         mgmt_client_id=mgmt_client_id,
         perm_name="perm-groups-user-manager-readonly",
-        description="user-manager can only read groups and view members",
+        description="Allow user-manager to view groups and manage their members without modifying group structure",
         resource_type="Groups",
-        scope_names=["view", "view-members", "manage-membership"],
+        scope_names=["view", "view-members", "manage-membership", "manage-members"],
         policy_ids=[policy_id]
     )
     note(f"Groups permission ID: {perm_groups_id}")
+
+    note("Ensuring Groups scope permission for group-manager-fgap")
+    group_manager_groups_perm_id = create_scope_permission(
+        keycloak_url=args.url,
+        token=token,
+        target_realm=args.realm,
+        mgmt_client_id=mgmt_client_id,
+        perm_name="perm-groups-group-manager-fgap",
+        description="Allow group-manager-fgap to manage group structure, attributes, and membership with AppRoles roots protected by SPI guard",
+        resource_type="Groups",
+        scope_names=["view", "view-members", "manage", "manage-membership", "manage-members"],
+        policy_ids=[group_manager_policy_id]
+    )
+    note(f"Group manager Groups permission ID: {group_manager_groups_perm_id}")
+
+    note("Ensuring Users scope permission for group-manager-fgap")
+    group_manager_users_perm_id = create_scope_permission(
+        keycloak_url=args.url,
+        token=token,
+        target_realm=args.realm,
+        mgmt_client_id=mgmt_client_id,
+        perm_name="perm-users-group-manager-fgap",
+        description="Allow group-manager-fgap to search users and manage their group membership",
+        resource_type="Users",
+        scope_names=["view", "manage-group-membership"],
+        policy_ids=[group_manager_policy_id]
+    )
+    note(f"Group manager Users permission ID: {group_manager_users_perm_id}")
 
     note("Success: FGAPv2 configured.")
 

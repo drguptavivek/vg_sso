@@ -58,6 +58,7 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String SELF_REGISTRATION_SERVICE_ROLE = "self-registration-service";
     private static final String SELF_REGISTRATION_PENDING_ATTRIBUTE = "self_registration_pending";
+    private static final String GROUP_MANAGER_ROLE = "group-manager-fgap";
     private static final long SELF_REGISTRATION_ROLLBACK_WINDOW_MILLIS = 15L * 60L * 1000L;
 
     // PUT /admin/realms/{realm}/users/{userId}; group(1) is the target UUID.
@@ -250,6 +251,7 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
         }
 
         boolean isClientManager = hasClientManagerRoleOnly(realm, actor);
+        boolean isGroupManager = hasRealmRole(realm, actor, GROUP_MANAGER_ROLE);
         boolean hasPcaBase = hasPcaBaseRole(realm, actor);
         // PCA users are identified by direct membership in AppRoles/{clientId} groups.
         Set<String> pcaClientIds = getPcaClientIds(realm, actor);
@@ -286,8 +288,41 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
             if (isClientPath || isClientCollectionMutation || isGroupPath || isUserGroupMembershipPath) {
                 ctx.abortWith(forbidden(
                     "Role 'delegated-client-admin-base' requires direct membership in AppRoles/{clientId}. " +
+
                     "Contact a realm administrator."
                 ));
+                return;
+            }
+        }
+
+        if (isGroupManager) {
+            if (isGroupPath) {
+                GroupModel target = session.groups().getGroupById(realm, groupMatcher.group(1));
+                if (target != null && appRolesRoot != null) {
+                    String subPath = groupMatcher.group(2);
+                    boolean isCreateChild = "POST".equals(methodUpper) && "/children".equals(subPath);
+                    if (isProtectedAppRolesRoot(target, appRolesRoot)) {
+                        if (!isCreateChild || appRolesRoot.getId().equals(target.getId())) {
+                            ctx.abortWith(forbidden("AppRoles and application administrator roots are protected."));
+                            return;
+                        }
+                    }
+                    String movedGroupId = isCreateChild ? payloadGroupId(ctx) : null;
+                    if (movedGroupId != null) {
+                        GroupModel movedGroup = session.groups().getGroupById(realm, movedGroupId);
+                        if (isProtectedAppRolesRoot(movedGroup, appRolesRoot)) {
+                            ctx.abortWith(forbidden("AppRoles and application administrator roots cannot be moved."));
+                            return;
+                        }
+                    }
+                }
+                return;
+            }
+            if (isUserGroupMembershipPath) {
+                GroupModel target = session.groups().getGroupById(realm, userGroupMembershipMatcher.group(1));
+                if (isProtectedAppRolesRoot(target, appRolesRoot)) {
+                    ctx.abortWith(forbidden("Direct membership of AppRoles administrator groups is protected."));
+                }
                 return;
             }
         }
@@ -531,6 +566,25 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
         }
         RoleModel pcaBaseRole = realm.getRole(DelegatedAdminGuardEventListener.PCA_BASE_ROLE_NAME);
         return pcaBaseRole != null && body.contains(pcaBaseRole.getId());
+    }
+
+    private boolean isProtectedAppRolesRoot(GroupModel group, GroupModel appRolesRoot) {
+        if (group == null || appRolesRoot == null) return false;
+        return appRolesRoot.getId().equals(group.getId()) || appRolesRoot.getId().equals(group.getParentId());
+    }
+
+    private String payloadGroupId(ContainerRequestContext ctx) throws IOException {
+        if (ctx.getEntityStream() == null) return null;
+        byte[] bytes = ctx.getEntityStream().readAllBytes();
+        ctx.setEntityStream(new ByteArrayInputStream(bytes));
+        if (bytes.length == 0) return null;
+        try {
+            JsonNode body = OBJECT_MAPPER.readTree(bytes);
+            JsonNode id = body.get("id");
+            return id != null && id.isTextual() && !id.asText().isBlank() ? id.asText() : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     private boolean payloadDisablesUser(ContainerRequestContext ctx) throws IOException {

@@ -53,6 +53,7 @@ export const config = {
     required("ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL"),
   ).replace(/\/+$/, ""),
   userManagerRole: optional("ADMIN_CONSOLE_USER_MANAGER_ROLE", "user-manager"),
+  groupManagerRole: optional("ADMIN_CONSOLE_GROUP_MANAGER_ROLE", "group-manager-fgap"),
   delegatedClientAdminRole: optional(
     "ADMIN_CONSOLE_DELEGATED_CLIENT_ADMIN_ROLE",
     "delegated-client-admin-base",

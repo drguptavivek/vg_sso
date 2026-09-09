@@ -2,6 +2,7 @@ import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
 const USER_MANAGER_ROLE = process.env.ADMIN_CONSOLE_USER_MANAGER_ROLE ?? "user-manager";
+const GROUP_MANAGER_ROLE = process.env.ADMIN_CONSOLE_GROUP_MANAGER_ROLE ?? "group-manager-fgap";
 const DELEGATED_CLIENT_ADMIN_ROLE =
   process.env.ADMIN_CONSOLE_DELEGATED_CLIENT_ADMIN_ROLE ?? "delegated-client-admin-base";
 
@@ -22,7 +23,7 @@ export default withAuth(
           return isRealmAdmin || roles.includes(USER_MANAGER_ROLE);
         }
         if (path.startsWith("/groups")) {
-          return isRealmAdmin || roles.includes(USER_MANAGER_ROLE) || roles.includes(DELEGATED_CLIENT_ADMIN_ROLE);
+          return isRealmAdmin || roles.includes(USER_MANAGER_ROLE) || roles.includes(GROUP_MANAGER_ROLE) || roles.includes(DELEGATED_CLIENT_ADMIN_ROLE);
         }
         return true;
       },

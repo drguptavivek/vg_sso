@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRealmAdmin } from "@/lib/session";
+import { requireRole } from "@/lib/session";
+import { config } from "@/lib/config";
 import { listAdminActions } from "@/db/actionLog";
+import { kcAdminRequest } from "@/lib/keycloakAdmin";
+import type { KcUser } from "@/types/keycloak";
 
 function optionalDate(value: string | null, endOfDay = false): Date | undefined {
   if (value === null || value === "") return undefined;
@@ -10,7 +13,7 @@ function optionalDate(value: string | null, endOfDay = false): Date | undefined 
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireRealmAdmin();
+  const auth = await requireRole(config.userManagerRole);
   if (auth.ok === false) return auth.response;
   const page = Math.max(1, Number(req.nextUrl.searchParams.get("page") ?? "1") || 1);
   const pageSize = Math.min(100, Math.max(10, Number(req.nextUrl.searchParams.get("pageSize") ?? "50") || 50));
@@ -23,5 +26,15 @@ export async function GET(req: NextRequest) {
     from: optionalDate(req.nextUrl.searchParams.get("from")),
     to: optionalDate(req.nextUrl.searchParams.get("to"), true),
   });
-  return NextResponse.json({ actions, page, pageSize, hasMore: actions.length === pageSize });
+  const userRequests = new Map<string, Promise<KcUser | null>>();
+  const actionsWithRecipient = await Promise.all(actions.map(async (entry) => {
+    if (entry.action !== "user.onboarding.resend" || !entry.targetUserId || Object.keys(entry.summary ?? {}).length > 0) return entry;
+    if (!userRequests.has(entry.targetUserId)) {
+      userRequests.set(entry.targetUserId, kcAdminRequest<KcUser>(auth.ctx.accessToken, `/users/${entry.targetUserId}`).then(({ data }) => data).catch(() => null));
+    }
+    const user = await userRequests.get(entry.targetUserId);
+    if (!user) return entry;
+    return { ...entry, summary: { username: user.username, email: user.email ?? "", phoneNumber: user.attributes?.phone_number?.[0] ?? "" } };
+  }));
+  return NextResponse.json({ actions: actionsWithRecipient, page, pageSize, hasMore: actions.length === pageSize });
 }

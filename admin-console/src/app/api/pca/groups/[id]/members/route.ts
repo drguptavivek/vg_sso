@@ -16,17 +16,17 @@ async function assertOwnedGroup(
   userId: string,
   groupId: string,
   isRealmAdmin: boolean,
-  isUserManager: boolean,
+  hasRealmWideAccess: boolean,
 ) {
   const [current, ownedRootPaths] = await Promise.all([
     kcAdminRequest<KcGroup>(accessToken, `/groups/${groupId}`),
-    getOwnedRootPaths(accessToken, userId, isRealmAdmin || isUserManager),
+    getOwnedRootPaths(accessToken, userId, isRealmAdmin || hasRealmWideAccess),
   ]);
   const group = current.data;
   if (!group) {
     return { ok: false as const, response: NextResponse.json({ error: "Group not found" }, { status: 404 }) };
   }
-  if (!isRealmAdmin && !isUserManager && !isWithinOwnedTree(group.path, ownedRootPaths)) {
+  if (!isRealmAdmin && !hasRealmWideAccess && !isWithinOwnedTree(group.path, ownedRootPaths)) {
     return {
       ok: false as const,
       response: NextResponse.json(
@@ -39,7 +39,7 @@ async function assertOwnedGroup(
 }
 
 export async function GET(_req: NextRequest, { params }: RouteParams) {
-  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole]);
+  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole, config.groupManagerRole]);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
@@ -50,7 +50,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       auth.ctx.userId,
       id,
       auth.ctx.isRealmAdmin,
-      auth.ctx.roles.includes(config.userManagerRole),
+      auth.ctx.roles.includes(config.userManagerRole) || auth.ctx.roles.includes(config.groupManagerRole),
     );
     if (!owned.ok) return owned.response;
 
@@ -64,7 +64,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 }
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
-  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole], req);
+  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole, config.groupManagerRole], req);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       auth.ctx.userId,
       id,
       auth.ctx.isRealmAdmin,
-      auth.ctx.roles.includes(config.userManagerRole),
+      auth.ctx.roles.includes(config.userManagerRole) || auth.ctx.roles.includes(config.groupManagerRole),
     );
     if (!owned.ok) return owned.response;
 

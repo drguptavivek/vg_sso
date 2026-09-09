@@ -4,6 +4,23 @@ import { config } from "@/lib/config";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
 import type { KcGroup } from "@/types/keycloak";
+function matchingGroups(groups: KcGroup[], search: string): KcGroup[] {
+  const needle = search.trim().toLocaleLowerCase();
+  const matches = new Map<string, KcGroup>();
+
+  function visit(group: KcGroup) {
+    if (
+      group.name.toLocaleLowerCase().includes(needle)
+      || group.path.toLocaleLowerCase().includes(needle)
+    ) {
+      matches.set(group.id, group);
+    }
+    group.subGroups?.forEach(visit);
+  }
+
+  groups.forEach(visit);
+  return Array.from(matches.values());
+}
 
 export async function GET(req: NextRequest) {
   const auth = await requireRole(config.userManagerRole);
@@ -31,7 +48,7 @@ export async function GET(req: NextRequest) {
     const { data } = await kcAdminRequest<KcGroup[]>(auth.ctx.accessToken, "/groups", {
       query: { search, briefRepresentation: "true", max: "50" },
     });
-    return NextResponse.json({ groups: data ?? [] });
+    return NextResponse.json({ groups: search ? matchingGroups(data ?? [], search) : (data ?? []) });
   } catch (err) {
     return errorResponse(err);
   }

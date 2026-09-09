@@ -9,10 +9,10 @@ import { fetchHrmsEmployee } from "@/lib/hrms/client";
 import { extensionFromHrms } from "@/lib/hrms/mapping";
 import { upsertUserExtension } from "@/db/userExtensions";
 import { recordAdminAction } from "@/db/actionLog";
+import { normalizeEmail } from "@/lib/selfRegistration";
 import type { CreateUserRequest, KcGroup, KcUser } from "@/types/keycloak";
 
 type Query = Record<string, string | number | boolean | undefined>;
-
 async function fetchAllUsers(accessToken: string, query: Query): Promise<KcUser[]> {
   const users: KcUser[] = [];
   const batchSize = 250;
@@ -194,6 +194,7 @@ export async function POST(req: NextRequest) {
   if (!body.username || body.username.trim() === "") {
     return NextResponse.json({ error: "username is required" }, { status: 400 });
   }
+  const email = normalizeEmail(body.email ?? null) || undefined;
 
   const attributes: Record<string, string[]> = {};
   for (const [name, rawValues] of Object.entries(body.attributes ?? {})) {
@@ -230,7 +231,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       body: {
         username: body.username.trim(),
-        email: body.email || undefined,
+        email,
         firstName: body.firstName || undefined,
         lastName: body.lastName || undefined,
         enabled: true,
@@ -262,7 +263,7 @@ export async function POST(req: NextRequest) {
 
     let onboardingSent = false;
     let onboardingError: string | undefined;
-    if (body.sendOnboarding !== false && body.email) {
+    if (body.sendOnboarding !== false && email) {
       try {
         await kcAdminRequest(auth.ctx.accessToken, `/users/${userId}/execute-actions-email`, {
           method: "PUT",

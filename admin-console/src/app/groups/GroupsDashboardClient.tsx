@@ -87,15 +87,18 @@ export default function GroupsDashboardClient({
   showHrLink = false,
   isRealmAdmin = false,
   isUserManager = false,
+  isGroupManager = false,
   canManageApplicationRoles = false,
 }: {
   username: string;
   showHrLink?: boolean;
   isRealmAdmin?: boolean;
   isUserManager?: boolean;
+  isGroupManager?: boolean;
   canManageApplicationRoles?: boolean;
 }) {
-  const hasRealmWideAccess = isRealmAdmin || isUserManager;
+  const hasRealmWideAccess = isRealmAdmin || isUserManager || isGroupManager;
+  const canManageInstituteGroups = isRealmAdmin || isGroupManager;
   const [activeView, setActiveView] = useState<"institute" | "applications" | "audit">(
     hasRealmWideAccess ? "institute" : "applications",
   );
@@ -227,14 +230,15 @@ export default function GroupsDashboardClient({
   }
 
   async function createChild(parent: GroupTreeNode) {
-    const name = window.prompt(`New application role name under "${parent.name}":`);
+    const isApplicationGroup = parent.path.startsWith("/AppRoles/");
+    const name = window.prompt(`New ${isApplicationGroup ? "application role" : "group"} name under "${parent.name}":`);
     if (!name || !name.trim()) return;
     try {
       await api(`/api/pca/groups/${parent.id}/children`, {
         method: "POST",
         body: JSON.stringify({ name: name.trim() }),
       });
-      toast.success("Created application role \"" + name.trim() + "\".");
+      toast.success(`Created "${name.trim()}".`);
       load();
     } catch (err) {
       toast.error(errMsg(err));
@@ -261,6 +265,61 @@ export default function GroupsDashboardClient({
     try {
       await api(`/api/pca/groups/${node.id}`, { method: "DELETE" });
       toast.success(`Deleted "${node.name}".`);
+      load();
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
+  }
+
+  async function move(node: GroupTreeNode, candidates: GroupTreeNode[]) {
+    const destinationPath = window.prompt(`Move "${node.name}" under group path:`, node.path.split("/").slice(0, -1).join("/"));
+    if (!destinationPath || destinationPath.trim() === node.path || destinationPath.trim() === node.path.split("/").slice(0, -1).join("/")) return;
+    const destination = flattenGroups(candidates).find((group) => group.path === destinationPath.trim());
+    if (!destination) {
+      toast.error("Destination group not found in this workspace.");
+      return;
+    }
+    if (destination.id === node.id || destination.path.startsWith(`${node.path}/`)) {
+      toast.error("A group cannot be moved under itself or its own descendant.");
+      return;
+    }
+    try {
+      await api(`/api/pca/groups/${node.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ parentId: destination.id }),
+      });
+      toast.success(`Moved "${node.name}" under "${destination.name}".`);
+      load();
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
+  }
+
+  async function editAttributes(node: GroupTreeNode) {
+    const current = JSON.stringify(node.attributes ?? {}, null, 2);
+    const raw = window.prompt(`Attributes JSON for "${node.name}":`, current);
+    if (raw === null || raw.trim() === current) return;
+    let attributes: Record<string, string[]>;
+    try {
+      const parsed = raw.trim() ? JSON.parse(raw) : {};
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Attributes must be a JSON object.");
+      attributes = Object.fromEntries(
+        Object.entries(parsed).map(([key, value]) => {
+          if (Array.isArray(value)) return [key, value.map((item) => String(item))];
+          if (value === null || value === undefined || value === "") return [key, []];
+          return [key, [String(value)]];
+        }),
+      );
+    } catch (err) {
+      toast.error(errMsg(err));
+      return;
+    }
+    try {
+      await api(`/api/pca/groups/${node.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ attributes }),
+      });
+      toast.success(`Updated attributes for "${node.name}".`);
       load();
     } catch (err) {
       toast.error(errMsg(err));
@@ -422,10 +481,12 @@ export default function GroupsDashboardClient({
             <ThreeColumnGroupBrowser
               parents={realmGroups}
               kind="institute"
-              canManageRoles={false}
+              canManageRoles={canManageInstituteGroups}
               onCreateChild={createChild}
               onRename={rename}
               onDelete={remove}
+              onMove={(node) => move(node, realmGroups)}
+              onEditAttributes={editAttributes}
               onMembershipChanged={load}
             />
           </CardContent>
@@ -463,6 +524,8 @@ export default function GroupsDashboardClient({
               onCreateChild={createChild}
               onRename={rename}
               onDelete={remove}
+              onMove={(node) => move(node, roots)}
+              onEditAttributes={editAttributes}
               onMembershipChanged={load}
             />
           </CardContent>
@@ -485,6 +548,10 @@ function findGroup(nodes: GroupTreeNode[], id: string): GroupTreeNode | null {
   return null;
 }
 
+function flattenGroups(nodes: GroupTreeNode[]): GroupTreeNode[] {
+  return nodes.flatMap((node) => [node, ...flattenGroups(node.children)]);
+}
+
 function filterGroupTree(nodes: GroupTreeNode[], query: string): GroupTreeNode[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return nodes;
@@ -504,6 +571,8 @@ function ThreeColumnGroupBrowser({
   onCreateChild,
   onRename,
   onDelete,
+  onMove,
+  onEditAttributes,
   onMembershipChanged,
 }: {
   parents: GroupTreeNode[];
@@ -512,6 +581,8 @@ function ThreeColumnGroupBrowser({
   onCreateChild: (node: GroupTreeNode) => void;
   onRename: (node: GroupTreeNode) => void;
   onDelete: (node: GroupTreeNode) => void;
+  onMove: (node: GroupTreeNode) => void;
+  onEditAttributes: (node: GroupTreeNode) => void;
   onMembershipChanged: () => void;
 }) {
   const [parentQuery, setParentQuery] = useState("");
@@ -595,9 +666,9 @@ function ThreeColumnGroupBrowser({
               {selectedParent ? `Nested under ${selectedParent.name}` : "Select a parent group."}
             </p>
           </div>
-          {kind === "application" && canManageRoles && selectedParent && (
+          {canManageRoles && selectedParent && (
             <Button size="sm" variant="outline" onClick={() => onCreateChild(selectedParent)}>
-              <Plus /> Add role
+              <Plus /> {kind === "application" ? "Add role" : "Add group"}
             </Button>
           )}
         </div>
@@ -634,6 +705,8 @@ function ThreeColumnGroupBrowser({
               onCreateChild={onCreateChild}
               onRename={onRename}
               onDelete={onDelete}
+              onMove={onMove}
+              onEditAttributes={onEditAttributes}
             />
           ))}
           {selectedParent && filteredChildren.length === 0 && (
@@ -659,6 +732,8 @@ function BrowserTreeNode({
   onCreateChild,
   onRename,
   onDelete,
+  onMove,
+  onEditAttributes,
   depth = 0,
 }: {
   node: GroupTreeNode;
@@ -670,6 +745,8 @@ function BrowserTreeNode({
   onCreateChild: (node: GroupTreeNode) => void;
   onRename: (node: GroupTreeNode) => void;
   onDelete: (node: GroupTreeNode) => void;
+  onMove: (node: GroupTreeNode) => void;
+  onEditAttributes: (node: GroupTreeNode) => void;
   depth?: number;
 }) {
   const [expanded, setExpanded] = useState(true);
@@ -701,12 +778,14 @@ function BrowserTreeNode({
             {node.memberCount ?? 0} direct members · {node.path}
           </span>
         </button>
-        {kind === "application" && canManageRoles && (
+        {canManageRoles && (
           <div className="flex shrink-0 gap-1">
-            <Button size="icon" variant="ghost" className="h-7 w-7" title="Add nested role" onClick={() => onCreateChild(node)}>
+            <Button size="icon" variant="ghost" className="h-7 w-7" title={kind === "application" ? "Add nested role" : "Add nested group"} onClick={() => onCreateChild(node)}>
               <Plus className="h-3.5 w-3.5" />
             </Button>
             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onRename(node)}>Rename</Button>
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onMove(node)}>Move</Button>
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onEditAttributes(node)}>Attributes</Button>
             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive" onClick={() => onDelete(node)}>Delete</Button>
           </div>
         )}
@@ -725,6 +804,8 @@ function BrowserTreeNode({
               onCreateChild={onCreateChild}
               onRename={onRename}
               onDelete={onDelete}
+              onMove={onMove}
+              onEditAttributes={onEditAttributes}
               depth={depth + 1}
             />
           ))}
@@ -1061,6 +1142,7 @@ function MembersColumn({
     );
   });
   const breadcrumb = group?.path.split("/").filter(Boolean) ?? [];
+  const isProtectedAppAdministratorGroup = breadcrumb[0] === "AppRoles" && breadcrumb.length === 2;
 
   return (
     <section className="bg-blue-50/70 p-4 dark:bg-blue-950/20">
@@ -1102,7 +1184,7 @@ function MembersColumn({
                     <p className="truncate font-medium">{user.username}</p>
                     {user.email && <p className="truncate text-xs text-muted-foreground">{user.email}</p>}
                   </div>
-                  <Button size="sm" variant="ghost" onClick={() => remove(user)}>Remove</Button>
+                  {!isProtectedAppAdministratorGroup && <Button size="sm" variant="ghost" onClick={() => remove(user)}>Remove</Button>}
                 </div>
               ))}
               {filteredMembers.length === 0 && (
@@ -1113,30 +1195,32 @@ function MembersColumn({
             </div>
           )}
 
-          <div className="space-y-2 border-t border-blue-200 pt-4 dark:border-blue-900">
-            <Label>Add an existing user</Label>
-            <Input
-              placeholder="Search username, name, or email..."
-              value={addQuery}
-              onChange={(event) => search(event.target.value)}
-              className="bg-background"
-            />
-            {results.length > 0 && (
-              <div className="max-h-40 overflow-y-auto rounded-lg border bg-background p-1 text-sm">
-                {results.map((user) => (
-                  <button
-                    key={user.id}
-                    type="button"
-                    onClick={() => add(user)}
-                    className="block w-full rounded px-2 py-1.5 text-left hover:bg-accent"
-                  >
-                    <span className="font-medium">+ {user.username}</span>
-                    {user.email && <span className="ml-1 text-xs text-muted-foreground">({user.email})</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {!isProtectedAppAdministratorGroup && (
+            <div className="space-y-2 border-t border-blue-200 pt-4 dark:border-blue-900">
+              <Label>Add an existing user</Label>
+              <Input
+                placeholder="Search username, name, or email..."
+                value={addQuery}
+                onChange={(event) => search(event.target.value)}
+                className="bg-background"
+              />
+              {results.length > 0 && (
+                <div className="max-h-40 overflow-y-auto rounded-lg border bg-background p-1 text-sm">
+                  {results.map((user) => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => add(user)}
+                      className="block w-full rounded px-2 py-1.5 text-left hover:bg-accent"
+                    >
+                      <span className="font-medium">+ {user.username}</span>
+                      {user.email && <span className="ml-1 text-xs text-muted-foreground">({user.email})</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </section>

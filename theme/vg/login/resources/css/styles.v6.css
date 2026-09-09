@@ -329,6 +329,31 @@ label[for="password"] {
   outline-offset: 3px;
 }
 
+
+.vg-login-cancel {
+  margin-top: 14px;
+  text-align: center;
+}
+
+.vg-login-cancel a {
+  color: var(--vg-primary-hover);
+  font-size: 1rem;
+  font-weight: 750;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.vg-login-cancel a:hover {
+  color: #102a43;
+}
+
+.vg-login-cancel a:focus-visible {
+  border-radius: 4px;
+  outline: 3px solid var(--vg-focus-border);
+  outline-offset: 3px;
+}
+
 .vg-admin-login-note {
   margin-top: 10px;
   text-align: center;

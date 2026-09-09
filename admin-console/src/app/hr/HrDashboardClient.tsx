@@ -320,9 +320,9 @@ export default function HrDashboardClient({
           <p className="text-sm text-muted-foreground">Signed in as {username}</p>
         </div>
         <div className="flex items-center gap-3">
-          {isRealmAdmin && <Button variant="outline" asChild>
+          <Button variant="outline" asChild>
             <a href="/audit">Audit log</a>
-          </Button>}
+          </Button>
           {showGroupsLink && (
             <Button variant="outline" asChild>
               <a href="/groups">Groups</a>
@@ -924,7 +924,10 @@ function EditProfilePanel({
     const core = Object.fromEntries(
       USER_PROFILE_FIELDS
         .filter((field) => field.source === "core")
-        .map((field) => [field.name, values[field.name]?.[0] ?? ""]),
+        .map((field) => {
+          const value = values[field.name]?.[0] ?? "";
+          return [field.name, field.name === "email" ? value.trim().toLocaleLowerCase() : value];
+        }),
     );
     const attributes = Object.fromEntries(
       USER_PROFILE_FIELDS
@@ -1315,7 +1318,7 @@ function CreateUserPanel({
         method: "POST",
         body: JSON.stringify({
           username: form.username.trim(),
-          email: form.email || undefined,
+          email: form.email.trim().toLocaleLowerCase() || undefined,
           firstName: form.firstName || undefined,
           lastName: form.lastName || undefined,
           phoneNumber: form.phoneNumber || undefined,

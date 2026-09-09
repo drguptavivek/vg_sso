@@ -10,8 +10,9 @@ export default async function GroupsPage() {
     redirect("/signin?callbackUrl=%2Fgroups");
   }
   const isUserManager = session.roles?.includes(config.userManagerRole) ?? false;
+  const isGroupManager = session.roles?.includes(config.groupManagerRole) ?? false;
   const isDelegatedAdmin = session.roles?.includes(config.delegatedClientAdminRole) ?? false;
-  if (!session.isRealmAdmin && !isUserManager && !isDelegatedAdmin) {
+  if (!session.isRealmAdmin && !isUserManager && !isGroupManager && !isDelegatedAdmin) {
     redirect("/");
   }
 
@@ -21,7 +22,8 @@ export default async function GroupsPage() {
       showHrLink={session.isRealmAdmin || isUserManager}
       isRealmAdmin={session.isRealmAdmin}
       isUserManager={isUserManager}
-      canManageApplicationRoles={session.isRealmAdmin || isDelegatedAdmin}
+      isGroupManager={isGroupManager}
+      canManageApplicationRoles={session.isRealmAdmin || isGroupManager || isDelegatedAdmin}
     />
   );
 }

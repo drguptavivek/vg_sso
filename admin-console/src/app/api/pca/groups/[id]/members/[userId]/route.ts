@@ -12,7 +12,7 @@ interface RouteParams {
 }
 
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
-  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole], req);
+  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole, config.groupManagerRole], req);
   if (!auth.ok) return auth.response;
 
   const { id, userId } = await params;
@@ -23,7 +23,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       getOwnedRootPaths(
         auth.ctx.accessToken,
         auth.ctx.userId,
-        auth.ctx.isRealmAdmin || auth.ctx.roles.includes(config.userManagerRole),
+        auth.ctx.isRealmAdmin || auth.ctx.roles.includes(config.userManagerRole) || auth.ctx.roles.includes(config.groupManagerRole),
       ),
     ]);
     const group = current.data;
@@ -33,6 +33,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     if (
       !auth.ctx.isRealmAdmin &&
       !auth.ctx.roles.includes(config.userManagerRole) &&
+      !auth.ctx.roles.includes(config.groupManagerRole) &&
       !isWithinOwnedTree(group.path, ownedRootPaths)
     ) {
       return NextResponse.json(
