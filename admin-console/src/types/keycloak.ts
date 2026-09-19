@@ -11,6 +11,7 @@ export interface KcUser {
   adminAccess?: string[];
   mfaConfigured?: boolean;
   mfaCredentialTypes?: string[];
+  requiredActions?: string[];
 }
 
 export interface KcGroup {
@@ -21,6 +22,22 @@ export interface KcGroup {
   attributes?: Record<string, string[]>;
   subGroupCount?: number;
   subGroups?: KcGroup[];
+}
+
+export interface KcClient {
+  id: string;
+  clientId: string;
+  name?: string;
+  description?: string;
+  enabled?: boolean;
+  protocol?: string;
+  publicClient?: boolean;
+}
+
+export interface KcRole {
+  id: string;
+  name: string;
+  description?: string;
 }
 
 export interface CreateUserRequest {

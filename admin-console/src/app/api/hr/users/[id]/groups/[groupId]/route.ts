@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
-import { errorResponse } from "@/lib/http";
-import { logAdminAction } from "@/lib/actionAudit";
+import { auditedErrorResponse, logAdminAction } from "@/lib/actionAudit";
 
 interface RouteParams {
   params: Promise<{ id: string; groupId: string }>;
@@ -22,7 +21,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     await logAdminAction(auth.ctx, "user.group.add", id, { groupId });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return errorResponse(err);
+    return auditedErrorResponse(err, auth.ctx, "user.group.add", id, { groupId });
   }
 }
 
@@ -39,6 +38,6 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     await logAdminAction(auth.ctx, "user.group.remove", id, { groupId });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return errorResponse(err);
+    return auditedErrorResponse(err, auth.ctx, "user.group.remove", id, { groupId });
   }
 }

@@ -57,6 +57,7 @@ function adminAccessLabel(access: string): string {
   if (access === "realm-admin") return "Realm Admin";
   if (access === "client-manager") return "Client Manager";
   if (access === "user-manager") return "User Manager";
+  if (access === "group-manager-fgap") return "Group Manager";
   if (access.startsWith("app-admin:")) return `App Admin · ${access.slice("app-admin:".length)}`;
   return access;
 }
@@ -66,6 +67,7 @@ function AdminAccessDots({ values }: { values: string[] }) {
     { label: "Realm Admin", active: values.includes("realm-admin"), color: "bg-violet-500" },
     { label: "User Manager", active: values.includes("user-manager"), color: "bg-blue-500" },
     { label: "Client Admin", active: values.includes("client-manager"), color: "bg-amber-500" },
+    { label: "Group Manager", active: values.includes("group-manager-fgap"), color: "bg-cyan-500" },
     { label: "App Admin", active: values.some((access) => access.startsWith("app-admin:")), color: "bg-emerald-500" },
   ];
   const activeIndicators = indicators.filter((indicator) => indicator.active);
@@ -159,6 +161,7 @@ export default function HrDashboardClient({
   const [showCreate, setShowCreate] = useState(false);
   const [editProfileFor, setEditProfileFor] = useState<KcUser | null>(null);
   const [resetPasswordFor, setResetPasswordFor] = useState<KcUser | null>(null);
+  const [resetTotpFor, setResetTotpFor] = useState<KcUser | null>(null);
   const [manageGroupsFor, setManageGroupsFor] = useState<KcUser | null>(null);
 
   const loadUsers = useCallback(async (q: string, requestedPage: number) => {
@@ -328,6 +331,14 @@ export default function HrDashboardClient({
               <a href="/groups">Groups</a>
             </Button>
           )}
+          <Button variant="outline" asChild>
+            <a href="/clients">Clients</a>
+          </Button>
+          {isRealmAdmin && (
+            <Button variant="outline" asChild>
+              <a href="/realm-roles">Realm roles</a>
+            </Button>
+          )}
           <Button onClick={() => { setShowCreate(true); setEditProfileFor(null); }}>
             <Plus /> Create user
           </Button>
@@ -398,6 +409,7 @@ export default function HrDashboardClient({
                   <option value="realm-admin">Realm Admin</option>
                   <option value="client-manager">Client Manager</option>
                   <option value="user-manager">User Manager</option>
+                  <option value="group-manager-fgap">Group Manager</option>
                   <option value="app-admin">App Admin (any application)</option>
                 </select>
               </div>
@@ -633,6 +645,8 @@ export default function HrDashboardClient({
               onEdit={(detail) => setEditProfileFor(detail)}
               onToggleEnabled={toggleEnabled}
               onResetPassword={setResetPasswordFor}
+              onResetTotp={setResetTotpFor}
+              mayResetMfa={isRealmAdmin || selectedUser.adminAccess?.includes("realm-admin") !== true}
               onResendOnboarding={resendOnboarding}
               onManageGroups={setManageGroupsFor}
               cannotDisable={cannotDisable(selectedUser)}
@@ -677,6 +691,17 @@ export default function HrDashboardClient({
 
       <ResetPasswordDialog user={resetPasswordFor} onOpenChange={(open) => !open && setResetPasswordFor(null)} />
 
+      <ResetTotpDialog
+        user={resetTotpFor}
+        onOpenChange={(open) => !open && setResetTotpFor(null)}
+        onCompleted={async () => {
+          if (!resetTotpFor) return;
+          const data = await api<{ user: KcUser }>(`/api/hr/users/${resetTotpFor.id}`);
+          setSelectedUser(data.user);
+          await loadUsers(search, page);
+        }}
+      />
+
       <ManageGroupsDialog user={manageGroupsFor} onOpenChange={(open) => !open && setManageGroupsFor(null)} />
     </div>
   );
@@ -701,6 +726,8 @@ function UserProfilePanel({
   onEdit,
   onToggleEnabled,
   onResetPassword,
+  onResetTotp,
+  mayResetMfa,
   onResendOnboarding,
   onManageGroups,
   cannotDisable,
@@ -709,6 +736,8 @@ function UserProfilePanel({
   onEdit: (user: KcUser) => void;
   onToggleEnabled: (user: KcUser) => void;
   onResetPassword: (user: KcUser) => void;
+  onResetTotp: (user: KcUser) => void;
+  mayResetMfa: boolean;
   onResendOnboarding: (user: KcUser) => void;
   onManageGroups: (user: KcUser) => void;
   cannotDisable: boolean;
@@ -757,6 +786,9 @@ function UserProfilePanel({
             {displayed.enabled ? "Disable" : "Enable"}
           </Button>
           <Button size="sm" variant="outline" onClick={() => onResetPassword(displayed)}>Reset password</Button>
+          <Button size="sm" variant="outline" disabled={!mayResetMfa}
+            title={!mayResetMfa ? "Only a realm administrator may reset MFA for another realm administrator." : undefined}
+            onClick={() => onResetTotp(displayed)}>Reset TOTP / lost device</Button>
           <Button size="sm" variant="outline" onClick={() => onResendOnboarding(displayed)}>Resend onboarding</Button>
           <Button size="sm" variant="outline" onClick={() => onManageGroups(displayed)}>Manage groups</Button>
         </div>
@@ -1169,10 +1201,12 @@ function HrmsSourcePanel({ initialEmployeeId = "", currentValues, includeUsernam
 
   async function fetchEmployee() {
     if (!employeeId.trim()) return void toast.error("Enter an employee ID.");
+    const normalizedEmployeeId = employeeId.trim().toUpperCase();
+    setEmployeeId(normalizedEmployeeId);
     setLoading(true);
     try {
       const fetched = await api<HrmsLookupResult>("/api/hr/hrms/lookup", {
-        method: "POST", body: JSON.stringify({ employeeId: employeeId.trim() }),
+        method: "POST", body: JSON.stringify({ employeeId: normalizedEmployeeId }),
       });
       const proposed = hrmsComparisons(fetched, currentValues, includeUsername);
       setResult(fetched);
@@ -1581,6 +1615,78 @@ function ResetPasswordDialog({
             </DialogFooter>
           </>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ResetTotpDialog({
+  user,
+  onOpenChange,
+  onCompleted,
+}: {
+  user: KcUser | null;
+  onOpenChange: (open: boolean) => void;
+  onCompleted: () => Promise<void>;
+}) {
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (user) setAcknowledged(false);
+  }, [user]);
+
+  async function submit() {
+    if (!user || !acknowledged) return;
+    setSubmitting(true);
+    try {
+      const result = await api<{ removedOtpCredentials: number }>(`/api/hr/users/${user.id}/reset-totp`, {
+        method: "POST",
+        body: JSON.stringify({ confirm: true }),
+      });
+      toast.success(
+        `TOTP reset for ${user.username}. ${result.removedOtpCredentials} OTP credential(s) removed; sessions revoked.`,
+      );
+      onOpenChange(false);
+      await onCompleted();
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!user} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reset TOTP / lost device: {user?.username}</DialogTitle>
+          <DialogDescription>
+            Use this only after verifying the user identity. Their password will not be changed.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <p>This action will:</p>
+          <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+            <li>remove all saved authenticator-app TOTP credentials;</li>
+            <li>revoke all active sessions; and</li>
+            <li>require fresh TOTP enrollment at the next browser login.</li>
+          </ul>
+          <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+            <Checkbox id="confirm-totp-reset" checked={acknowledged}
+              onCheckedChange={(checked) => setAcknowledged(checked === true)} />
+            <Label htmlFor="confirm-totp-reset" className="font-normal leading-5">
+              I verified the user identity and understand that all active sessions will be revoked.
+            </Label>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
+          <Button variant="destructive" onClick={submit} disabled={!acknowledged || submitting}>
+            {submitting && <Loader2 className="animate-spin" />}
+            Reset TOTP and revoke sessions
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

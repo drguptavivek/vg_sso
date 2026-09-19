@@ -3,8 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
-import { errorResponse } from "@/lib/http";
-import { logAdminAction } from "@/lib/actionAudit";
+import { auditedErrorResponse, logAdminAction } from "@/lib/actionAudit";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -45,6 +44,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       generatedPassword: generated ? password : undefined,
     });
   } catch (err) {
-    return errorResponse(err);
+    return auditedErrorResponse(err, auth.ctx, "user.password.reset", id);
   }
 }

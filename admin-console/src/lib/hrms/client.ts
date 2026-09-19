@@ -44,6 +44,7 @@ export class HrmsError extends Error {
 }
 
 export async function fetchHrmsEmployee(employeeId: string): Promise<HrmsEmployeeRecord> {
+  const normalizedEmployeeId = employeeId.trim().toUpperCase();
   const url = process.env.HRMS_API_URL?.trim();
   const token = process.env.HRMS_API_TOKEN?.trim();
   if (!url || !token) throw new HrmsError("HRMS integration is not configured", 503);
@@ -57,7 +58,7 @@ export async function fetchHrmsEmployee(employeeId: string): Promise<HrmsEmploye
         "X-Role": process.env.HRMS_API_ROLE?.trim() || "user",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ request_id: employeeId }),
+      body: JSON.stringify({ request_id: normalizedEmployeeId }),
       cache: "no-store",
       redirect: "error",
       signal: controller.signal,
@@ -70,7 +71,7 @@ export async function fetchHrmsEmployee(employeeId: string): Promise<HrmsEmploye
     }
     const data = parsed.data.data;
     return {
-      employeeId: text(data.employee_id) || employeeId,
+      employeeId: text(data.employee_id) || normalizedEmployeeId,
       name: text(data.name) || "",
       fatherName: text(data.father_name),
       motherName: text(data.mother_name),

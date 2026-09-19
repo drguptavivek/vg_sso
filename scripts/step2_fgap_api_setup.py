@@ -212,21 +212,71 @@ def main():
     parser.add_argument('--user',        default='permrealmadmin', help='Realm Admin User')
     parser.add_argument('--password',    default='StrongPerm@123', help='Realm Admin Password')
     parser.add_argument('--realm',       default='org-new-delhi', help='Target Realm to configure')
+    parser.add_argument('--auth-realm',  default=os.getenv('KC_ADMIN_AUTH_REALM'), help='Realm used to authenticate the administrator (defaults to target realm)')
     parser.add_argument('--marker-file', default=os.getenv('STEP2_FGAP_MARKER_FILE', ''))
     parser.add_argument('--force',       action='store_true', default=(os.getenv('STEP2_FGAP_FORCE', 'false').lower() == 'true'))
+    parser.add_argument('--only-user-manager-client-audit', action='store_true', help='Update only the user-manager Clients view permission')
+    parser.add_argument('--only-user-manager-users', action='store_true', help='Update only the user-manager Users permission')
     args = parser.parse_args()
 
-    if args.marker_file and not args.force and os.path.exists(args.marker_file):
+    if args.marker_file and not args.force and not args.only_user_manager_client_audit and not args.only_user_manager_users and os.path.exists(args.marker_file):
         note(f"marker exists at {args.marker_file}; skipping (set STEP2_FGAP_FORCE=true to rerun).")
         sys.exit(0)
 
     note(f"Connecting to {args.url} as {args.user}")
     try:
-        note(f"Requesting admin token in realm '{args.realm}'")
-        token = get_admin_token(args.url, args.realm, args.user, args.password)
+        auth_realm = args.auth_realm or args.realm
+        note(f"Requesting admin token in realm '{auth_realm}'")
+        token = get_admin_token(args.url, auth_realm, args.user, args.password)
     except Exception as e:
         note(f"Failed to get admin token: {e}")
         sys.exit(1)
+
+    if args.only_user_manager_users:
+        note("Applying only the user-manager Users permission")
+        mgmt_client_id = get_realm_management_client_id(args.url, token, args.realm)
+        user_manager_role_id = get_role_id(args.url, token, args.realm, "user-manager")
+        policy_id = create_role_policy(
+            args.url, token, args.realm, mgmt_client_id,
+            policy_name="policy-user-manager",
+            role_id=user_manager_role_id
+        )
+        permission_id = create_scope_permission(
+            keycloak_url=args.url,
+            token=token,
+            target_realm=args.realm,
+            mgmt_client_id=mgmt_client_id,
+            perm_name="perm-users-user-manager",
+            description="Allow user-manager to create/edit users, reset credentials, send execute-actions email, and assign group membership",
+            resource_type="Users",
+            scope_names=["view", "manage", "manage-group-membership"],
+            policy_ids=[policy_id]
+        )
+        note(f"Users permission ID: {permission_id}")
+        return
+
+    if args.only_user_manager_client_audit:
+        note("Applying only the user-manager Clients audit permission")
+        mgmt_client_id = get_realm_management_client_id(args.url, token, args.realm)
+        user_manager_role_id = get_role_id(args.url, token, args.realm, 'user-manager')
+        policy_id = create_role_policy(
+            args.url, token, args.realm, mgmt_client_id,
+            policy_name="policy-user-manager",
+            role_id=user_manager_role_id
+        )
+        permission_id = create_scope_permission(
+            keycloak_url=args.url,
+            token=token,
+            target_realm=args.realm,
+            mgmt_client_id=mgmt_client_id,
+            perm_name="perm-clients-user-manager-audit",
+            description="Allow user-manager to audit registered clients without modifying them",
+            resource_type="Clients",
+            scope_names=["view"],
+            policy_ids=[policy_id]
+        )
+        note(f"Clients audit permission ID: {permission_id}")
+        return
 
     # 1. Ensure adminPermissionsEnabled=true
     note("Checking realm admin permissions switch")
@@ -305,6 +355,20 @@ def main():
         policy_ids=[policy_id]
     )
     note(f"Groups permission ID: {perm_groups_id}")
+
+    note("Ensuring Clients audit permission for user-manager")
+    user_manager_clients_perm_id = create_scope_permission(
+        keycloak_url=args.url,
+        token=token,
+        target_realm=args.realm,
+        mgmt_client_id=mgmt_client_id,
+        perm_name="perm-clients-user-manager-audit",
+        description="Allow user-manager to audit registered clients without modifying them",
+        resource_type="Clients",
+        scope_names=["view"],
+        policy_ids=[policy_id]
+    )
+    note(f"Clients audit permission ID: {user_manager_clients_perm_id}")
 
     note("Ensuring Groups scope permission for group-manager-fgap")
     group_manager_groups_perm_id = create_scope_permission(

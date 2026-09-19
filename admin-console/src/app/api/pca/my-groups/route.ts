@@ -24,11 +24,12 @@ async function fetchChildrenTree(accessToken: string, group: KcGroup): Promise<G
 }
 
 export async function GET() {
-  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole, config.groupManagerRole]);
+  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole, config.clientManagerRole, config.groupManagerRole]);
   if (!auth.ok) return auth.response;
 
   try {
     const hasRealmWideAccess = auth.ctx.isRealmAdmin || auth.ctx.roles.includes(config.userManagerRole) || auth.ctx.roles.includes(config.groupManagerRole);
+    const canViewAllAppRoots = hasRealmWideAccess || auth.ctx.roles.includes(config.clientManagerRole);
     const appRolesPath = "/" + config.appRolesGroupName;
     let realmGroups: GroupTreeNode[] = [];
     if (hasRealmWideAccess) {
@@ -42,7 +43,7 @@ export async function GET() {
       );
     }
 
-    const ownedRootPaths = await getOwnedRootPaths(auth.ctx.accessToken, auth.ctx.userId, hasRealmWideAccess);
+    const ownedRootPaths = await getOwnedRootPaths(auth.ctx.accessToken, auth.ctx.userId, canViewAllAppRoots);
     if (ownedRootPaths.length === 0) {
       return NextResponse.json({ roots: [], realmGroups });
     }

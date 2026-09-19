@@ -6,7 +6,7 @@ import { errorResponse } from "@/lib/http";
 import type { KcUser } from "@/types/keycloak";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole, config.groupManagerRole]);
+  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole, config.clientManagerRole, config.groupManagerRole]);
   if (!auth.ok) return auth.response;
 
   const rawSearch = req.nextUrl.searchParams.get("search")?.trim() ?? "";

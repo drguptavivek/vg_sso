@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
-import { errorResponse } from "@/lib/http";
-import { logAdminAction } from "@/lib/actionAudit";
+import { auditedErrorResponse, logAdminAction } from "@/lib/actionAudit";
 import type { KcUser } from "@/types/keycloak";
 
 interface RouteParams {
@@ -29,6 +28,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     await logAdminAction(auth.ctx, "user.onboarding.resend", id, { actions, username: user.username, email: user.email ?? "", phoneNumber: user.attributes?.phone_number?.[0] ?? "" });
     return NextResponse.json({ ok: true, actions });
   } catch (err) {
-    return errorResponse(err);
+    return auditedErrorResponse(err, auth.ctx, "user.onboarding.resend", id);
   }
 }

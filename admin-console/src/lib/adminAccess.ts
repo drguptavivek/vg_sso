@@ -65,6 +65,7 @@ export async function adminAccessForUser(accessToken: string, userId: string): P
   const realmRoles = new Set((mappings?.realmMappings ?? []).map((role) => role.name));
   if (realmRoles.has("client-manager")) values.push("client-manager");
   if (realmRoles.has("user-manager")) values.push("user-manager");
+  if (realmRoles.has("group-manager-fgap")) values.push("group-manager-fgap");
 
   const realmManagement = Object.values(mappings?.clientMappings ?? {})
     .find((mapping) => mapping.client === "realm-management");

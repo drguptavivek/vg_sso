@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "@/lib/session";
+import { requireAnyRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { listAdminActions } from "@/db/actionLog";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
@@ -13,7 +13,7 @@ function optionalDate(value: string | null, endOfDay = false): Date | undefined 
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireRole(config.userManagerRole);
+  const auth = await requireAnyRole([config.userManagerRole, config.clientManagerRole, config.groupManagerRole, config.delegatedClientAdminRole, config.auditorRole]);
   if (auth.ok === false) return auth.response;
   const page = Math.max(1, Number(req.nextUrl.searchParams.get("page") ?? "1") || 1);
   const pageSize = Math.min(100, Math.max(10, Number(req.nextUrl.searchParams.get("pageSize") ?? "50") || 50));
@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
   const outcome = outcomeValue === "success" || outcomeValue === "failure" ? outcomeValue : undefined;
   const actions = await listAdminActions({
     page, pageSize,
+    actorUserId: auth.ctx.isRealmAdmin || auth.ctx.roles.includes(config.auditorRole) ? undefined : auth.ctx.userId,
     action: req.nextUrl.searchParams.get("action")?.trim() || undefined,
     outcome,
     from: optionalDate(req.nextUrl.searchParams.get("from")),

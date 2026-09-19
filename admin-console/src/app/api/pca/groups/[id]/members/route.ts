@@ -5,7 +5,7 @@ import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
 import { getOwnedRootPaths, isWithinOwnedTree } from "@/lib/ownership";
 import type { KcGroup, KcUser } from "@/types/keycloak";
-import { logAdminAction } from "@/lib/actionAudit";
+import { auditedErrorResponse, logAdminAction } from "@/lib/actionAudit";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -17,14 +17,37 @@ async function assertOwnedGroup(
   groupId: string,
   isRealmAdmin: boolean,
   hasRealmWideAccess: boolean,
+  canViewAllAppRoots: boolean,
+  isMutation = false,
 ) {
   const [current, ownedRootPaths] = await Promise.all([
     kcAdminRequest<KcGroup>(accessToken, `/groups/${groupId}`),
-    getOwnedRootPaths(accessToken, userId, isRealmAdmin || hasRealmWideAccess),
+    getOwnedRootPaths(accessToken, userId, isRealmAdmin || hasRealmWideAccess || canViewAllAppRoots),
   ]);
   const group = current.data;
   if (!group) {
     return { ok: false as const, response: NextResponse.json({ error: "Group not found" }, { status: 404 }) };
+  }
+  const segments = group.path.split("/").filter(Boolean);
+  const isAppRolesRoot = segments[0] === config.appRolesGroupName && segments.length === 1;
+  const isApplicationRoot = segments[0] === config.appRolesGroupName && segments.length === 2;
+  if (isMutation && !isRealmAdmin && canViewAllAppRoots && !hasRealmWideAccess && !isApplicationRoot) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { error: "Client managers may only manage direct application administrator membership" },
+        { status: 403 },
+      ),
+    };
+  }
+  if (isMutation && !isRealmAdmin && (isAppRolesRoot || (isApplicationRoot && !canViewAllAppRoots))) {
+    return {
+      ok: false as const,
+      response: NextResponse.json(
+        { error: "Direct membership of AppRoles administrator groups is protected" },
+        { status: 403 },
+      ),
+    };
   }
   if (!isRealmAdmin && !hasRealmWideAccess && !isWithinOwnedTree(group.path, ownedRootPaths)) {
     return {
@@ -39,7 +62,7 @@ async function assertOwnedGroup(
 }
 
 export async function GET(_req: NextRequest, { params }: RouteParams) {
-  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole, config.groupManagerRole]);
+  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole, config.clientManagerRole, config.groupManagerRole]);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
@@ -51,6 +74,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       id,
       auth.ctx.isRealmAdmin,
       auth.ctx.roles.includes(config.userManagerRole) || auth.ctx.roles.includes(config.groupManagerRole),
+      auth.ctx.roles.includes(config.clientManagerRole),
     );
     if (!owned.ok) return owned.response;
 
@@ -64,7 +88,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 }
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
-  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole, config.groupManagerRole], req);
+  const auth = await requireAnyRole([config.delegatedClientAdminRole, config.userManagerRole, config.clientManagerRole, config.groupManagerRole], req);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
@@ -80,6 +104,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       id,
       auth.ctx.isRealmAdmin,
       auth.ctx.roles.includes(config.userManagerRole) || auth.ctx.roles.includes(config.groupManagerRole),
+      auth.ctx.roles.includes(config.clientManagerRole),
+      true,
     );
     if (!owned.ok) return owned.response;
 
@@ -89,6 +115,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     await logAdminAction(auth.ctx, "user.group.add", body.userId, { groupId: id, groupPath: owned.group.path });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return errorResponse(err);
+    return auditedErrorResponse(err, auth.ctx, "user.group.add", body.userId, { groupId: id });
   }
 }

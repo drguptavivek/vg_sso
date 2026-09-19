@@ -108,6 +108,7 @@ echo "STEP6: Assigning composites to client-manager..."
 # manage-clients: Save/update buttons work; note: bypasses FGAP v2 NEGATIVE on system
 #   clients — the DelegatedAdminGuardFilter enforces system client protection instead.
 # view-users + query-users: browse user directory to find users to make PCA.
+# query-groups: browse AppRoles application roots in the curated admin console.
 kcadm add-roles -r "$REALM_NAME" \
   --rname client-manager \
   --cclientid realm-management \
@@ -117,6 +118,7 @@ kcadm add-roles -r "$REALM_NAME" \
   --rolename manage-clients \
   --rolename view-users \
   --rolename query-users \
+  --rolename query-groups \
   >/dev/null || true
 
 echo "STEP6: Verifying client-manager composites..."

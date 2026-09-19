@@ -16,6 +16,15 @@ const actionLabels: Record<string, string> = {
   "user.profile.update": "User profile updated",
   "user.status.update": "Account enabled or disabled",
   "user.onboarding.resend": "Onboarding email resent",
+  "user.password.reset": "Password reset",
+  "user.totp.reset": "TOTP reset",
+  "user.group.add": "Group membership added",
+  "user.group.remove": "Group membership removed",
+  "group.create": "Group created",
+  "group.rename": "Group renamed",
+  "group.move": "Group moved",
+  "group.attributes.update": "Group attributes updated",
+  "group.delete": "Group deleted",
 };
 
 function friendlySummary(summary: Record<string, unknown>) {
@@ -24,11 +33,13 @@ function friendlySummary(summary: Record<string, unknown>) {
   const phoneNumber = typeof summary.phoneNumber === "string" && summary.phoneNumber ? summary.phoneNumber : null;
   const values = Array.isArray(summary.fields) ? summary.fields : Array.isArray(summary.profileFields) ? summary.profileFields : [];
   const fields = values.filter((value): value is string => typeof value === "string").map((value) => value.replaceAll("_", " ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase());
-  return [username ? `User: ${username}` : "", email ? `Email: ${email}` : "", phoneNumber ? `Phone: ${phoneNumber}` : "", fields.length ? `Changed: ${fields.join(", ")}` : "", summary.hrmsAttached === true ? "HRMS record linked" : ""].filter(Boolean).join(" · ") || "No additional details";
+  const status = typeof summary.status === "number" ? `HTTP ${summary.status}` : "";
+  const reason = typeof summary.reason === "string" ? summary.reason : "";
+  return [username ? `User: ${username}` : "", status, reason, email ? `Email: ${email}` : "", phoneNumber ? `Phone: ${phoneNumber}` : "", fields.length ? `Changed: ${fields.join(", ")}` : "", summary.hrmsAttached === true ? "HRMS record linked" : ""].filter(Boolean).join(" · ") || "No additional details";
 }
 
 
-export default function AuditDashboardClient({ username }: { username: string }) {
+export default function AuditDashboardClient({ username, globalView }: { username: string; globalView: boolean }) {
   const [actions, setActions] = useState<ActionLogRow[]>([]);
   const [page, setPage] = useState(1); const [hasMore, setHasMore] = useState(false);
   const [action, setAction] = useState(""); const [outcome, setOutcome] = useState("");
@@ -47,11 +58,11 @@ export default function AuditDashboardClient({ username }: { username: string })
   }, [action, outcome, from, to]);
   useEffect(() => { void load(1); }, [load]);
   return <div className="mx-auto w-full max-w-[1920px] space-y-6 p-4 sm:p-6">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold">Administrative activity</h1><p className="text-sm text-muted-foreground">Changes made through SSO Admin · Signed in as {username}</p></div>
-      <div className="flex gap-2"><Button variant="outline" asChild><a href="/hr">HR users</a></Button><Button variant="outline" onClick={() => load(page)} disabled={loading}><RefreshCw /> Refresh</Button><SignOutButton /></div></div>
-    <Card><CardHeader><CardTitle>Activity log</CardTitle><CardDescription>Review user-management changes. Sensitive values and raw HRMS responses are never stored here.</CardDescription></CardHeader>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold">Administrative activity</h1><p className="text-sm text-muted-foreground">{globalView ? "All administrative activity" : "Your administrative activity and errors"} · Signed in as {username}</p></div>
+      <div className="flex gap-2"><Button variant="outline" asChild><a href="/">Dashboard</a></Button><Button variant="outline" onClick={() => load(page)} disabled={loading}><RefreshCw /> Refresh</Button><SignOutButton /></div></div>
+    <Card><CardHeader><CardTitle>Activity log</CardTitle><CardDescription>{globalView ? "Review all administrative changes and errors." : "Review your own administrative changes and errors."} Sensitive values and raw HRMS responses are never stored here.</CardDescription></CardHeader>
       <CardContent className="space-y-4"><div className="grid gap-3 md:grid-cols-4">
-        <div><Label htmlFor="audit-action">Activity</Label><select id="audit-action" value={action} onChange={(e) => setAction(e.target.value)} className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="">All activities</option><option value="user.create">User created</option><option value="user.profile.update">User profile updated</option><option value="user.status.update">Account enabled or disabled</option><option value="user.onboarding.resend">Onboarding email resent</option></select></div>
+        <div><Label htmlFor="audit-action">Activity</Label><select id="audit-action" value={action} onChange={(e) => setAction(e.target.value)} className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="">All activities</option><option value="user.create">User created</option><option value="user.profile.update">User profile updated</option><option value="user.status.update">Account enabled or disabled</option><option value="user.onboarding.resend">Onboarding email resent</option><option value="user.password.reset">Password reset</option><option value="user.totp.reset">TOTP reset</option><option value="user.group.add">Group membership added</option><option value="user.group.remove">Group membership removed</option><option value="group.create">Group created</option><option value="group.rename">Group renamed</option><option value="group.move">Group moved</option><option value="group.delete">Group deleted</option></select></div>
         <div><Label htmlFor="audit-outcome">Result</Label><select id="audit-outcome" value={outcome} onChange={(e) => setOutcome(e.target.value)} className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="">All results</option><option value="success">Completed successfully</option><option value="failure">Failure</option></select></div>
         <div><Label htmlFor="audit-from">From date</Label><Input id="audit-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
         <div><Label htmlFor="audit-to">To date</Label><Input id="audit-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div></div>

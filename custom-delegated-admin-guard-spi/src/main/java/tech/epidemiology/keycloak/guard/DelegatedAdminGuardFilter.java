@@ -59,12 +59,29 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
     private static final String SELF_REGISTRATION_SERVICE_ROLE = "self-registration-service";
     private static final String SELF_REGISTRATION_PENDING_ATTRIBUTE = "self_registration_pending";
     private static final String GROUP_MANAGER_ROLE = "group-manager-fgap";
+    private static final String USER_MANAGER_ROLE = "user-manager";
     private static final long SELF_REGISTRATION_ROLLBACK_WINDOW_MILLIS = 15L * 60L * 1000L;
 
     // PUT /admin/realms/{realm}/users/{userId}; group(1) is the target UUID.
     // POST /admin/realms/{realm}/users (self-registration account creation).
     private static final Pattern USER_COLLECTION_PATH = Pattern.compile(
         "^/admin/realms/[^/]+/users/?$"
+    );
+
+    private static final Pattern USER_PASSWORD_RESET_PATH = Pattern.compile(
+        "^/admin/realms/[^/]+/users/[^/]+/reset-password$"
+    );
+
+    private static final Pattern USER_EXECUTE_ACTIONS_EMAIL_PATH = Pattern.compile(
+        "^/admin/realms/[^/]+/users/[^/]+/execute-actions-email$"
+    );
+
+    private static final Pattern USER_CREDENTIAL_PATH = Pattern.compile(
+        "^/admin/realms/[^/]+/users/[^/]+/credentials/[^/]+$"
+    );
+
+    private static final Pattern USER_LOGOUT_PATH = Pattern.compile(
+        "^/admin/realms/[^/]+/users/[^/]+/logout$"
     );
 
     private static final Pattern USER_ROOT_PATH = Pattern.compile(
@@ -250,8 +267,10 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
             }
         }
 
+        boolean isRealmAdmin = hasRealmAdminRole(realm, actor);
         boolean isClientManager = hasClientManagerRoleOnly(realm, actor);
         boolean isGroupManager = hasRealmRole(realm, actor, GROUP_MANAGER_ROLE);
+        boolean isUserManager = hasRealmRole(realm, actor, USER_MANAGER_ROLE);
         boolean hasPcaBase = hasPcaBaseRole(realm, actor);
         // PCA users are identified by direct membership in AppRoles/{clientId} groups.
         Set<String> pcaClientIds = getPcaClientIds(realm, actor);
@@ -280,6 +299,10 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
             ctx.abortWith(forbidden(
                 "Role 'delegated-client-admin-base' is protected and cannot be modified through admin REST."
             ));
+            return;
+        }
+
+        if (isRealmAdmin) {
             return;
         }
 
@@ -321,10 +344,34 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
             if (isUserGroupMembershipPath) {
                 GroupModel target = session.groups().getGroupById(realm, userGroupMembershipMatcher.group(1));
                 if (isProtectedAppRolesRoot(target, appRolesRoot)) {
+                    boolean isDirectAppRoot = target != null && appRolesRoot != null
+                        && appRolesRoot.getId().equals(target.getParentId());
+                    if (isClientManager && isDirectAppRoot) {
+                        return;
+                    }
                     ctx.abortWith(forbidden("Direct membership of AppRoles administrator groups is protected."));
                 }
                 return;
             }
+        }
+
+        if (isUserManager && isUserGroupMembershipPath) {
+            GroupModel target = session.groups().getGroupById(realm, userGroupMembershipMatcher.group(1));
+            if (isProtectedAppRolesRoot(target, appRolesRoot)) {
+                ctx.abortWith(forbidden("Direct membership of AppRoles administrator groups is protected."));
+            }
+            return;
+        }
+
+        boolean isAllowedUserManagerOperation = isUserRead
+            || isUserRootUpdate
+            || ("POST".equals(methodUpper) && USER_COLLECTION_PATH.matcher(path).matches())
+            || ("PUT".equals(methodUpper) && USER_PASSWORD_RESET_PATH.matcher(path).matches())
+            || ("PUT".equals(methodUpper) && USER_EXECUTE_ACTIONS_EMAIL_PATH.matcher(path).matches())
+            || ("DELETE".equals(methodUpper) && USER_CREDENTIAL_PATH.matcher(path).matches())
+            || ("POST".equals(methodUpper) && USER_LOGOUT_PATH.matcher(path).matches());
+        if (isUserManager && isAllowedUserManagerOperation) {
+            return; // FGAP remains authoritative for these explicitly supported user-manager operations.
         }
 
         if (!isClientManager && !isPca) {
@@ -440,6 +487,20 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
             String appRolesId = appRolesRoot.getId();
             if (appRolesId.equals(targetGroup.getId())) {
                 ctx.abortWith(forbidden("AppRoles parent group membership is protected."));
+                return;
+            }
+
+            // A client-manager appoints application administrators by adding
+            // direct members to AppRoles/{clientId}. This is the intentional
+            // privilege boundary for the global client-manager role.
+            boolean isAppRoot = appRolesId.equals(targetGroup.getParentId());
+            if (isClientManager && isAppRoot) {
+                return;
+            }
+            if (isClientManager) {
+                ctx.abortWith(forbidden(
+                    "Client managers may only manage direct application administrator membership."
+                ));
                 return;
             }
 
@@ -642,7 +703,8 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
         }
 
         // Do not restrict genuine realm admins
-        RoleModel realmAdminRole = realm.getRole("realm-admin");
+        RoleModel realmAdminRole = realm.getClientByClientId("realm-management") == null
+            ? null : realm.getClientByClientId("realm-management").getRole("realm-admin");
         if (realmAdminRole != null && user.hasRole(realmAdminRole)) {
             return false;
         }

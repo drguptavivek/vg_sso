@@ -52,7 +52,9 @@ export const config = {
     "ADMIN_CONSOLE_KEYCLOAK_INTERNAL_URL",
     required("ADMIN_CONSOLE_KEYCLOAK_PUBLIC_URL"),
   ).replace(/\/+$/, ""),
+  auditorRole: optional("ADMIN_CONSOLE_AUDITOR_ROLE", "auditor"),
   userManagerRole: optional("ADMIN_CONSOLE_USER_MANAGER_ROLE", "user-manager"),
+  clientManagerRole: optional("ADMIN_CONSOLE_CLIENT_MANAGER_ROLE", "client-manager"),
   groupManagerRole: optional("ADMIN_CONSOLE_GROUP_MANAGER_ROLE", "group-manager-fgap"),
   delegatedClientAdminRole: optional(
     "ADMIN_CONSOLE_DELEGATED_CLIENT_ADMIN_ROLE",

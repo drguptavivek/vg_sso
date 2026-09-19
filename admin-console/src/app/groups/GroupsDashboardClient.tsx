@@ -87,14 +87,18 @@ export default function GroupsDashboardClient({
   showHrLink = false,
   isRealmAdmin = false,
   isUserManager = false,
+  isClientManager = false,
   isGroupManager = false,
+  canViewClients = false,
   canManageApplicationRoles = false,
 }: {
   username: string;
   showHrLink?: boolean;
   isRealmAdmin?: boolean;
   isUserManager?: boolean;
+  isClientManager?: boolean;
   isGroupManager?: boolean;
+  canViewClients?: boolean;
   canManageApplicationRoles?: boolean;
 }) {
   const hasRealmWideAccess = isRealmAdmin || isUserManager || isGroupManager;
@@ -232,11 +236,14 @@ export default function GroupsDashboardClient({
   async function createChild(parent: GroupTreeNode) {
     const isApplicationGroup = parent.path.startsWith("/AppRoles/");
     const name = window.prompt(`New ${isApplicationGroup ? "application role" : "group"} name under "${parent.name}":`);
+    const parentSegments = parent.path.split("/").filter(Boolean);
+    const requiresAcknowledgement = isGroupManager && !isRealmAdmin && parentSegments[0] === "AppRoles" && parentSegments.length === 2;
     if (!name || !name.trim()) return;
+    if (requiresAcknowledgement && !window.confirm(`Create application role subgroup "${name.trim()}" under "${parent.name}"? This grants a new assignable role within the existing application; it does not create a new application root.`)) return;
     try {
       await api(`/api/pca/groups/${parent.id}/children`, {
         method: "POST",
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify({ name: name.trim(), acknowledgeApplicationRoleCreation: requiresAcknowledgement }),
       });
       toast.success(`Created "${name.trim()}".`);
       load();
@@ -342,6 +349,17 @@ export default function GroupsDashboardClient({
               <a href="/hr">HR users</a>
             </Button>
           )}
+          {canViewClients && (
+            <Button variant="outline" asChild>
+              <a href="/clients">Clients</a>
+            </Button>
+          )}
+          {isRealmAdmin && (
+            <Button variant="outline" asChild>
+              <a href="/realm-roles">Realm roles</a>
+            </Button>
+          )}
+          <Button variant="outline" asChild><a href="/audit">My activity</a></Button>
           <SignOutButton />
         </div>
       </div>
@@ -521,6 +539,7 @@ export default function GroupsDashboardClient({
               parents={roots}
               kind="application"
               canManageRoles={canManageApplicationRoles}
+              canManageProtectedRootMembership={isRealmAdmin || isClientManager}
               onCreateChild={createChild}
               onRename={rename}
               onDelete={remove}
@@ -568,6 +587,7 @@ function ThreeColumnGroupBrowser({
   parents,
   kind,
   canManageRoles,
+  canManageProtectedRootMembership = false,
   onCreateChild,
   onRename,
   onDelete,
@@ -578,6 +598,7 @@ function ThreeColumnGroupBrowser({
   parents: GroupTreeNode[];
   kind: "institute" | "application";
   canManageRoles: boolean;
+  canManageProtectedRootMembership?: boolean;
   onCreateChild: (node: GroupTreeNode) => void;
   onRename: (node: GroupTreeNode) => void;
   onDelete: (node: GroupTreeNode) => void;
@@ -717,7 +738,11 @@ function ThreeColumnGroupBrowser({
         </div>
       </section>
 
-      <MembersColumn group={selectedGroup} onChanged={onMembershipChanged} />
+      <MembersColumn
+        group={selectedGroup}
+        onChanged={onMembershipChanged}
+        canManageProtectedRootMembership={canManageProtectedRootMembership}
+      />
     </div>
   );
 }
@@ -1053,9 +1078,11 @@ function GroupNode({
 function MembersColumn({
   group,
   onChanged,
+  canManageProtectedRootMembership = false,
 }: {
   group: GroupTreeNode | null;
   onChanged: () => void;
+  canManageProtectedRootMembership?: boolean;
 }) {
   const [members, setMembers] = useState<KcUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1143,6 +1170,7 @@ function MembersColumn({
   });
   const breadcrumb = group?.path.split("/").filter(Boolean) ?? [];
   const isProtectedAppAdministratorGroup = breadcrumb[0] === "AppRoles" && breadcrumb.length === 2;
+  const canChangeMembership = !isProtectedAppAdministratorGroup || canManageProtectedRootMembership;
 
   return (
     <section className="bg-blue-50/70 p-4 dark:bg-blue-950/20">
@@ -1184,7 +1212,7 @@ function MembersColumn({
                     <p className="truncate font-medium">{user.username}</p>
                     {user.email && <p className="truncate text-xs text-muted-foreground">{user.email}</p>}
                   </div>
-                  {!isProtectedAppAdministratorGroup && <Button size="sm" variant="ghost" onClick={() => remove(user)}>Remove</Button>}
+                  {canChangeMembership && <Button size="sm" variant="ghost" onClick={() => remove(user)}>Remove</Button>}
                 </div>
               ))}
               {filteredMembers.length === 0 && (
@@ -1195,7 +1223,7 @@ function MembersColumn({
             </div>
           )}
 
-          {!isProtectedAppAdministratorGroup && (
+          {canChangeMembership && (
             <div className="space-y-2 border-t border-blue-200 pt-4 dark:border-blue-900">
               <Label>Add an existing user</Label>
               <Input

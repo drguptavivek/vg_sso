@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAnyRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
-import { errorResponse } from "@/lib/http";
 import { getOwnedRootPaths, isOwnedDescendant, isWithinOwnedTree } from "@/lib/ownership";
 import type { KcGroup } from "@/types/keycloak";
-import { logAdminAction } from "@/lib/actionAudit";
+import { auditedErrorResponse, logAdminAction } from "@/lib/actionAudit";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -45,10 +44,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
     const currentSegments = currentGroup.path.split("/").filter(Boolean);
-    if (isGroupManager && currentSegments[0] === config.appRolesGroupName && currentSegments.length <= 2) {
+    if (!auth.ctx.isRealmAdmin && isGroupManager && currentSegments[0] === config.appRolesGroupName && currentSegments.length <= 2) {
       return NextResponse.json({ error: "AppRoles and application administrator roots are protected" }, { status: 403 });
     }
-    if (!isGroupManager && !isOwnedDescendant(currentGroup.path, ownedRootPaths)) {
+    if (!auth.ctx.isRealmAdmin && !isGroupManager && !isOwnedDescendant(currentGroup.path, ownedRootPaths)) {
       return NextResponse.json({ error: "You may only manage groups inside your own AppRoles subtree" }, { status: 403 });
     }
 
@@ -60,7 +59,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       const destinationResponse = await kcAdminRequest<KcGroup>(auth.ctx.accessToken, `/groups/${body.parentId}`);
       destination = destinationResponse.data;
       if (!destination) return NextResponse.json({ error: "Destination group not found" }, { status: 404 });
-      if (!isGroupManager && !isWithinOwnedTree(destination.path, ownedRootPaths)) {
+      if (!auth.ctx.isRealmAdmin && !isGroupManager && !isWithinOwnedTree(destination.path, ownedRootPaths)) {
         return NextResponse.json({ error: "You may only move groups inside your own AppRoles subtree" }, { status: 403 });
       }
     }
@@ -94,7 +93,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return errorResponse(err);
+    return auditedErrorResponse(err, auth.ctx, "group.update", undefined, { groupId: id });
   }
 }
 
@@ -114,10 +113,10 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
     const currentSegments = currentGroup.path.split("/").filter(Boolean);
-    if (auth.ctx.roles.includes(config.groupManagerRole) && currentSegments[0] === config.appRolesGroupName && currentSegments.length <= 2) {
+    if (!auth.ctx.isRealmAdmin && auth.ctx.roles.includes(config.groupManagerRole) && currentSegments[0] === config.appRolesGroupName && currentSegments.length <= 2) {
       return NextResponse.json({ error: "AppRoles and application administrator roots are protected" }, { status: 403 });
     }
-    if (!auth.ctx.roles.includes(config.groupManagerRole) && !isOwnedDescendant(currentGroup.path, ownedRootPaths)) {
+    if (!auth.ctx.isRealmAdmin && !auth.ctx.roles.includes(config.groupManagerRole) && !isOwnedDescendant(currentGroup.path, ownedRootPaths)) {
       return NextResponse.json({ error: "You may only delete groups inside your own AppRoles subtree" }, { status: 403 });
     }
 
@@ -125,6 +124,6 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     await logAdminAction(auth.ctx, "group.delete", undefined, { groupId: id, groupPath: currentGroup.path });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return errorResponse(err);
+    return auditedErrorResponse(err, auth.ctx, "group.delete", undefined, { groupId: id });
   }
 }

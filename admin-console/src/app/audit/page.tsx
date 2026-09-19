@@ -7,6 +7,7 @@ import AuditDashboardClient from "./AuditDashboardClient";
 export default async function AuditPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/signin?callbackUrl=%2Faudit");
-  if (session.isRealmAdmin !== true && !session.roles?.includes(config.userManagerRole)) redirect("/");
-  return <AuditDashboardClient username={session.user?.name ?? session.userId ?? "unknown"} />;
+  const mayView = session.isRealmAdmin === true || [config.userManagerRole, config.clientManagerRole, config.groupManagerRole, config.delegatedClientAdminRole, config.auditorRole].some((role) => session.roles?.includes(role));
+  if (!mayView) redirect("/");
+  return <AuditDashboardClient username={session.user?.name ?? session.userId ?? "unknown"} globalView={session.isRealmAdmin === true || session.roles?.includes(config.auditorRole) === true} />;
 }

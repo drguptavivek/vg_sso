@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { kcAdminRequest, KeycloakAdminError } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
+import { auditedErrorResponse } from "@/lib/actionAudit";
 import { enrichUsersWithAdminAccess } from "@/lib/adminAccess";
 import { USER_PROFILE_ATTRIBUTE_FIELDS, USER_PROFILE_FIELDS } from "@/lib/userProfileFields";
 import { fetchHrmsEmployee } from "@/lib/hrms/client";
@@ -131,7 +132,7 @@ export async function GET(req: NextRequest) {
         const memberIds = new Set(members.map((user) => user.id));
         matches = matches.filter((user) => memberIds.has(user.id));
       }
-    } else if (adminAccessFilter === "client-manager" || adminAccessFilter === "user-manager") {
+    } else if (adminAccessFilter === "client-manager" || adminAccessFilter === "user-manager" || adminAccessFilter === "group-manager-fgap") {
       matches = await fetchRealmRoleMembers(auth.ctx.accessToken, adminAccessFilter);
     } else if (adminAccessFilter === "app-admin") {
       matches = await fetchAppAdminMembers(auth.ctx.accessToken);
@@ -221,7 +222,7 @@ export async function POST(req: NextRequest) {
     try {
       hrms = await fetchHrmsEmployee(body.hrmsEmployeeId.trim());
     } catch (err) {
-      return errorResponse(err);
+      return auditedErrorResponse(err, auth.ctx, "user.create", undefined);
     }
   }
 
@@ -285,6 +286,6 @@ export async function POST(req: NextRequest) {
         // Preserve the original error; a failed compensating delete is visible in Keycloak events.
       }
     }
-    return errorResponse(err);
+    return auditedErrorResponse(err, auth.ctx, "user.create", createdUserId);
   }
 }

@@ -40,6 +40,12 @@ export default async function HomePage() {
   if (roles.includes(config.groupManagerRole)) {
     redirect("/groups");
   }
+  if (roles.includes(config.clientManagerRole)) {
+    redirect("/clients");
+  }
+  if (roles.includes(config.auditorRole)) {
+    redirect("/audit");
+  }
   if (roles.includes(config.delegatedClientAdminRole)) {
     redirect("/groups");
   }

@@ -503,7 +503,7 @@ else
     -s 'description=User operations without group creation' >/dev/null
 fi
 kcadm add-roles -r "${REALM_NAME}" --rname user-manager --cclientid realm-management \
-  --rolename view-users --rolename query-users --rolename query-groups >/dev/null || true
+  --rolename view-users --rolename query-users --rolename query-groups --rolename query-clients >/dev/null || true
 echo "STEP2: ensuring realm role 'group-manager-fgap' ..."
 if kcadm get "roles/group-manager-fgap" -r "${REALM_NAME}" >/dev/null 2>&1; then
   kcadm update "roles/group-manager-fgap" -r "${REALM_NAME}" -s name=group-manager-fgap -s 'description=Manage realm groups except protected AppRoles administrator roots' >/dev/null

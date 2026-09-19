@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/session";
 import { config } from "@/lib/config";
 import { kcAdminRequest } from "@/lib/keycloakAdmin";
 import { errorResponse } from "@/lib/http";
+import { auditedErrorResponse } from "@/lib/actionAudit";
 import { adminAccessForUser, hasRealmAdminAccess, mfaCredentialTypesForUser } from "@/lib/adminAccess";
 import { USER_PROFILE_ATTRIBUTE_FIELDS, USER_PROFILE_FIELDS } from "@/lib/userProfileFields";
 import { extensionForUser, upsertUserExtension } from "@/db/userExtensions";
@@ -175,6 +176,6 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return errorResponse(err);
+    return auditedErrorResponse(err, auth.ctx, body.enabled === undefined ? "user.profile.update" : "user.status.update", id);
   }
 }

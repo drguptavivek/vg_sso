@@ -11,6 +11,10 @@ The optional LAN-only EHRMS self-registration module is documented in [`SelfRegi
 
 `/hr` is available to `user-manager` and `realm-management -> realm-admin`. It supports user search/create, enable/disable, password reset, onboarding-email resend, existing group membership management, and full user-profile editing.
 
+`/clients` is available to realm admins, `client-manager`, and `user-manager`. It audits registered non-system clients against their `/AppRoles/{clientId}` group, direct client administrators, and direct application-role subgroups. Realm admins and client managers may add or remove client administrators; user managers have read-only access. The page does not repair missing AppRoles groups.
+
+`/realm-roles` is available only to realm admins. It lists and manages direct membership of the `client-manager`, `user-manager`, and `group-manager-fgap` realm roles. The API rejects every role name outside that allowlist.
+
 The screen uses a two-pane layout: a compact, paginated user directory on the
 left and the selected profile/create/edit workflow on the right. Advanced
 filters are collapsed by default and include an inclusive account-expiry date
@@ -68,11 +72,13 @@ The full-width dashboard uses a left navigation menu with three workspaces:
 
 - **Browse Institute Wide Groups** (user-manager and realm-admin): a three-column browser for parent groups, recursively nested child groups, and direct members.
 - **Application Specific Roles**: a three-column browser for applications, recursively nested application roles, and direct members.
+- `group-manager-fgap` cannot create application roots directly under `/AppRoles`; it may create role subgroups beneath an existing `/AppRoles/{application}` root only after explicit UI confirmation and API acknowledgement.
 - **Audit a User's Groups** (user-manager and realm-admin): search up to 20 matching accounts, explicitly select by username/name/email, clear the search, and view expanded membership rows.
   - Realm-wide memberships show one row per top-level group followed by subgroup paths.
   - Application-specific memberships show one row per application. Direct `AppRoles/{clientId}` membership is marked **Delegated admin**; deeper memberships are listed as application roles.
 
 Delegated client admins see only **Application Specific Roles**, only for applications whose root group they directly belong to. They never receive institute-wide groups, their subgroups, their members, or user audit. Within an owned application, they can inspect each role's direct users and manage role membership and structure. Application roots cannot be renamed or deleted.
+- `group-manager-fgap` cannot create application roots directly under `/AppRoles`; it may create role subgroups beneath an existing `/AppRoles/{application}` root only after explicit UI confirmation and API acknowledgement.
 
 The parent, nested-group, and member columns each have a live filter. Group navigation uses neutral tinted backgrounds while the member column uses a contrasting blue tint. The member column shows the selected group's complete hierarchy as a breadcrumb, including arbitrary nesting depth.
 
@@ -141,6 +147,7 @@ NextAuth performs browser authorization against the public Keycloak issuer. Logo
 
 1. Confirm `user-manager` reaches `/hr` and all three `/groups` workspaces.
 2. Confirm a delegated admin sees only the Application Specific Roles workspace, only owned applications, and the direct users assigned to each role.
+- `group-manager-fgap` cannot create application roots directly under `/AppRoles`; it may create role subgroups beneath an existing `/AppRoles/{application}` root only after explicit UI confirmation and API acknowledgement.
 3. Confirm `realm-management -> realm-admin` reaches both dashboards and all application roots.
 4. Confirm user audit handles multiple/no matches, Clear, delegated-admin detection, and role lists.
 5. Confirm cards show direct-member counts and open the correct member list.

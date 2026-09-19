@@ -28,8 +28,10 @@ export async function listAdminActions(options: {
   outcome?: "success" | "failure";
   from?: Date;
   to?: Date;
+  actorUserId?: string;
 }) {
   const conditions = [
+    options.actorUserId ? eq(adminActionLogs.actorUserId, options.actorUserId) : undefined,
     options.action ? eq(adminActionLogs.action, options.action) : undefined,
     options.outcome ? eq(adminActionLogs.outcome, options.outcome) : undefined,
     options.from ? gte(adminActionLogs.occurredAt, options.from) : undefined,

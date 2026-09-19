@@ -283,6 +283,7 @@ def main():
     parser.add_argument('--user',        default=os.getenv('KC_NEW_REALM_ADMIN_USER', 'realmadmin1'))
     parser.add_argument('--password',    default=os.getenv('KC_NEW_REALM_ADMIN_PASSWORD'))
     parser.add_argument('--realm',       default=os.getenv('KC_NEW_REALM_NAME', 'org-new-delhi'))
+    parser.add_argument('--auth-realm',  default=os.getenv('KC_ADMIN_AUTH_REALM'))
     parser.add_argument('--env',         default=os.getenv('KEYCLOAK_ENV', 'production'))
     parser.add_argument('--marker-file', default=os.getenv('STEP6_FGAP_MARKER_FILE', ''))
     parser.add_argument('--force',       action='store_true', default=(os.getenv('STEP6_FGAP_FORCE', 'false').lower() == 'true'))
@@ -304,7 +305,7 @@ def main():
 
     # ── Authenticate ──
     try:
-        token = get_admin_token(KC_URL, REALM, args.user, args.password)
+        token = get_admin_token(KC_URL, args.auth_realm or REALM, args.user, args.password)
     except Exception as e:
         note(f"Authentication failed: {e}")
         sys.exit(1)
@@ -375,19 +376,32 @@ def main():
     else:
         note("⚠️  No system clients resolved — skipping deny permission")
 
-    # ── Step 8: Users view permission for client-manager ──
-    #    Allows client-manager to browse the user directory (read-only) in the
-    #    admin console, needed to find users to promote as PCA.
-    #    'view' scope only — no manage, no delete, no credential reset.
+    # ── Step 8: Group membership permissions for client-manager ──
+    #    A direct member of AppRoles/{clientId} is that application's
+    #    administrator. FGAP grants the operation globally; the delegated
+    #    admin guard confines client-manager membership writes to AppRoles
+    #    application roots.
+    ensure_scope_permission(
+        KC_URL, token, REALM, mgmt_id,
+        perm_name='perm-groups-client-manager-membership',
+        resource_type='Groups',
+        scope_names=['view', 'view-members', 'manage-membership'],
+        policy_ids=[policy_allow_id],
+        resource_ids=None
+    )
+    note("✅ Groups view+membership permission set for client-manager")
+
+    # The Users-side scope is required by PUT/DELETE
+    # /users/{userId}/groups/{groupId}. It does not grant profile edits.
     ensure_scope_permission(
         KC_URL, token, REALM, mgmt_id,
         perm_name='perm-users-client-manager-view',
         resource_type='Users',
-        scope_names=['view'],
+        scope_names=['view', 'manage-group-membership'],
         policy_ids=[policy_allow_id],
         resource_ids=None
     )
-    note("✅ Users view permission set for client-manager")
+    note("✅ Users view+manage-group-membership permission set for client-manager")
 
     # ── Step 9: Register the delegated-admin-guard event listener ──
     #    The delegated-admin-guard SPI enforces rules that FGAP v2 scopes cannot:
@@ -404,6 +418,7 @@ def main():
     note("   • View all clients")
     note("   • Create new clients")
     note("   • Manage (update, disable) their own clients")
+    note("   • Appoint/remove application administrators through direct AppRoles/{clientId} membership")
     note("   • Cannot edit/delete system clients (delegated-admin-guard SPI filter)")
     note("     (manage-clients composite bypasses FGAP v2 NEGATIVE; filter is the guard)")
     note("   • Cannot delete ANY client (delegated-admin-guard SPI)")
