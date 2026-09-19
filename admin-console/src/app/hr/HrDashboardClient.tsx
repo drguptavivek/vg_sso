@@ -39,7 +39,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) {
     await signOut({ redirect: false });
-    window.location.assign("/signin?callbackUrl=%2Fhr");
+    window.location.replace("/");
     return await new Promise<T>(() => undefined);
   }
   if (!res.ok) {

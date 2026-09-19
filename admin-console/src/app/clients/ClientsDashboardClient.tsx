@@ -23,7 +23,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const body = await response.json().catch(() => ({}));
   if (response.status === 401) {
     await signOut({ redirect: false });
-    window.location.assign("/signin?callbackUrl=%2Fclients");
+    window.location.replace("/");
     return await new Promise<T>(() => undefined);
   }
   if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : `Request failed (${response.status})`);

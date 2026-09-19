@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { signOut } from "next-auth/react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,11 @@ export default function AuditDashboardClient({ username, globalView }: { usernam
       if (action.trim()) params.set("action", action.trim()); if (outcome) params.set("outcome", outcome);
       if (from) params.set("from", from); if (to) params.set("to", to);
       const response = await fetch(`/api/audit/actions?${params}`, { cache: "no-store" }); const data = await response.json();
+      if (response.status === 401) {
+        await signOut({ redirect: false });
+        window.location.replace("/");
+        return;
+      }
       if (!response.ok) throw new Error(data.error || "We could not load the activity log. Please try again.");
       setActions(data.actions); setPage(requestedPage); setHasMore(data.hasMore);
     } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
