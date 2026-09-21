@@ -53,7 +53,7 @@ http://localhost:8080/admin/$REALM/console/
 
 ## USER PROFILE SCHEMA
 Added fields in `org-new-delhi` user profile:
-1. `phone_number`  User/admin can view, only admin can edit; max 20 chars; must match `+` optional and 10–15 digits.
+1. `phone_number`  User/admin can view, only admin can edit; must be a 10-digit Indian mobile number beginning with `6`–`9`. Enter it without `+91` or a leading `0`; international numbers are not supported by the SMS provider.
 2. `employment_type`  Single-select dropdown: `Permanent`, `Contract`, `Research`, `Student`, `Deputed`, `Outsourced`, `Vendor`; user/admin view, admin edit only.
 3. `employee_id`  Single text field; max 32 chars; user/admin view, admin edit only.
 4. `posts` Multi-valued text field (multiple entries allowed); each value max 50 chars; user/admin view, admin edit only.

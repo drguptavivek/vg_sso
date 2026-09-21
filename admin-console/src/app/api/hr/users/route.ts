@@ -11,6 +11,7 @@ import { extensionFromHrms } from "@/lib/hrms/mapping";
 import { upsertUserExtension } from "@/db/userExtensions";
 import { recordAdminAction } from "@/db/actionLog";
 import { normalizeEmail } from "@/lib/selfRegistration";
+import { isValidPhoneNumber, normalizePhoneNumber, PHONE_NUMBER_ERROR } from "@/lib/phoneNumber";
 import type { CreateUserRequest, KcGroup, KcUser } from "@/types/keycloak";
 
 type Query = Record<string, string | number | boolean | undefined>;
@@ -212,8 +213,12 @@ export async function POST(req: NextRequest) {
     }
     if (values.length) attributes[name] = values;
   }
-  if (body.phoneNumber) {
-    attributes.phone_number = [body.phoneNumber];
+  const submittedPhone = body.phoneNumber ?? attributes.phone_number?.[0];
+  if (submittedPhone) {
+    if (!isValidPhoneNumber(submittedPhone)) {
+      return NextResponse.json({ error: PHONE_NUMBER_ERROR }, { status: 400 });
+    }
+    attributes.phone_number = [normalizePhoneNumber(submittedPhone)];
   }
   if (attributes.phone_number?.length) attributes.phone_verified = ["false"];
 

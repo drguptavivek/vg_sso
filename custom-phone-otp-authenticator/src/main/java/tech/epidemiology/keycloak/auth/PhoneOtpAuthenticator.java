@@ -59,6 +59,15 @@ public class PhoneOtpAuthenticator implements Authenticator {
           context.form().setError("Phone number missing").createErrorPage(Response.Status.BAD_REQUEST));
       return;
     }
+    phone = normalizePhone(phone);
+    if (phone == null) {
+      LOG.warnf("OTP_PHONE_INVALID userId=%s username=%s realm=%s", user.getId(), user.getUsername(),
+          context.getRealm().getName());
+      context.failureChallenge(AuthenticationFlowError.INVALID_USER,
+          context.form().setError("A valid 10-digit Indian mobile number is required. International numbers are not supported. Contact an administrator.")
+              .createErrorPage(Response.Status.BAD_REQUEST));
+      return;
+    }
 
     String otp = generateOtp(getInt(cfg, "otp.length", 6));
     String otpToken = UUID.randomUUID().toString();
@@ -185,6 +194,13 @@ public class PhoneOtpAuthenticator implements Authenticator {
           context.form().setError("Phone number missing").createErrorPage(Response.Status.BAD_REQUEST));
       return;
     }
+    phone = normalizePhone(phone);
+    if (phone == null) {
+      context.failureChallenge(AuthenticationFlowError.INVALID_USER,
+          context.form().setError("A valid 10-digit Indian mobile number is required. International numbers are not supported. Contact an administrator.")
+              .createErrorPage(Response.Status.BAD_REQUEST));
+      return;
+    }
 
     String otp = generateOtp(getInt(cfg, "otp.length", 6));
     String otpToken = UUID.randomUUID().toString();
@@ -240,6 +256,15 @@ public class PhoneOtpAuthenticator implements Authenticator {
       return digitsOnly;
     }
     return "*".repeat(Math.max(0, digitsOnly.length() - 4)) + digitsOnly.substring(digitsOnly.length() - 4);
+  }
+
+  static String normalizePhone(String phone) {
+    if (phone == null) return null;
+    String compact = phone.trim().replaceAll("\\s+", "");
+    if (compact.matches("0[0-9]{10}")) compact = compact.substring(1);
+    else if (compact.matches("\\+91[0-9]{10}")) compact = compact.substring(3);
+    else if (compact.matches("91[0-9]{10}")) compact = compact.substring(2);
+    return compact.matches("[6-9][0-9]{9}") ? compact : null;
   }
 
   private boolean sendOtp(AuthenticationFlowContext context, UserModel user, String phone, String otp, String otpToken) {

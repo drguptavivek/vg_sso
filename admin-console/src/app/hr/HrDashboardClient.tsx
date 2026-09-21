@@ -20,6 +20,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  formatPhoneNumberInput,
+  isValidPhoneNumber,
+  normalizePhoneNumber,
+  PHONE_NUMBER_ERROR,
+} from "@/lib/phoneNumber";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -259,6 +265,18 @@ export default function HrDashboardClient({
     try {
       await api(`/api/hr/users/${user.id}/resend-onboarding`, { method: "POST", body: "{}" });
       toast.success(`Onboarding email queued for ${user.username}.`);
+    } catch (err) {
+      toast.error(errMsg(err));
+    }
+  }
+
+  async function sendTestSms(user: KcUser) {
+    try {
+      const result = await api<{ mobile?: string }>(`/api/hr/users/${user.id}/test-sms`, {
+        method: "POST",
+        body: "{}",
+      });
+      toast.success(`Test SMS sent to ${result.mobile ?? "the registered mobile number"}.`);
     } catch (err) {
       toast.error(errMsg(err));
     }
@@ -648,6 +666,7 @@ export default function HrDashboardClient({
               onResetTotp={setResetTotpFor}
               mayResetMfa={isRealmAdmin || selectedUser.adminAccess?.includes("realm-admin") !== true}
               onResendOnboarding={resendOnboarding}
+              onSendTestSms={sendTestSms}
               onManageGroups={setManageGroupsFor}
               cannotDisable={cannotDisable(selectedUser)}
             />
@@ -729,6 +748,7 @@ function UserProfilePanel({
   onResetTotp,
   mayResetMfa,
   onResendOnboarding,
+  onSendTestSms,
   onManageGroups,
   cannotDisable,
 }: {
@@ -739,6 +759,7 @@ function UserProfilePanel({
   onResetTotp: (user: KcUser) => void;
   mayResetMfa: boolean;
   onResendOnboarding: (user: KcUser) => void;
+  onSendTestSms: (user: KcUser) => void;
   onManageGroups: (user: KcUser) => void;
   cannotDisable: boolean;
 }) {
@@ -790,6 +811,9 @@ function UserProfilePanel({
             title={!mayResetMfa ? "Only a realm administrator may reset MFA for another realm administrator." : undefined}
             onClick={() => onResetTotp(displayed)}>Reset TOTP / lost device</Button>
           <Button size="sm" variant="outline" onClick={() => onResendOnboarding(displayed)}>Resend onboarding</Button>
+          <Button size="sm" variant="outline" disabled={!displayed.attributes?.phone_number?.[0]}
+            title={!displayed.attributes?.phone_number?.[0] ? "Add a valid Indian mobile number first." : "Send a diagnostic SMS; this is not a login OTP."}
+            onClick={() => onSendTestSms(displayed)}>Send test SMS</Button>
           <Button size="sm" variant="outline" onClick={() => onManageGroups(displayed)}>Manage groups</Button>
         </div>
         <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
@@ -889,7 +913,15 @@ function EditProfilePanel({
         setDetail(data.user);
         setValues(
           Object.fromEntries(
-            USER_PROFILE_FIELDS.map((field) => [field.name, valuesForField(data.user, field)]),
+            USER_PROFILE_FIELDS.map((field) => {
+              const fieldValues = valuesForField(data.user, field);
+              return [
+                field.name,
+                field.name === "phone_number"
+                  ? fieldValues.map(formatPhoneNumberInput)
+                  : fieldValues,
+              ];
+            }),
           ),
         );
         setHrmsEmployeeId(data.extension?.hrmsEmployeeId ?? data.user.attributes?.employee_id?.[0] ?? "");
@@ -952,6 +984,11 @@ function EditProfilePanel({
         return;
       }
     }
+    const phone = values.phone_number?.[0] ?? "";
+    if (phone && !isValidPhoneNumber(phone)) {
+      toast.error(PHONE_NUMBER_ERROR);
+      return;
+    }
 
     const core = Object.fromEntries(
       USER_PROFILE_FIELDS
@@ -966,6 +1003,7 @@ function EditProfilePanel({
         .filter((field) => field.source === "attribute" && field.editable !== false)
         .map((field) => [field.name, values[field.name] ?? []]),
     );
+    if (phone) attributes.phone_number = [normalizePhoneNumber(phone)];
 
     setSubmitting(true);
     try {
@@ -1097,10 +1135,16 @@ function ProfileFieldEditor({
                     id={index === 0 ? fieldId : undefined}
                     type={field.control === "date" ? "date" : field.control === "email" ? "email" : "text"}
                     value={value}
-                    onChange={(event) => onChange(index, event.target.value)}
+                    onChange={(event) => onChange(
+                      index,
+                      field.name === "phone_number"
+                        ? formatPhoneNumberInput(event.target.value)
+                        : event.target.value,
+                    )}
                     maxLength={field.maxLength}
                     pattern={field.pattern}
                     placeholder={field.placeholder}
+                    inputMode={field.name === "phone_number" ? "numeric" : undefined}
                     list={field.control === "timezone" ? `${fieldId}-options` : undefined}
                   />
                   {field.control === "timezone" && (
@@ -1123,6 +1167,9 @@ function ProfileFieldEditor({
         <Button type="button" size="sm" variant="outline" onClick={onAdd}>
           <Plus /> Add value
         </Button>
+      )}
+      {field.name === "phone_number" && values[0] && !isValidPhoneNumber(values[0]) && (
+        <p className="text-xs font-medium text-destructive" role="alert">{PHONE_NUMBER_ERROR}</p>
       )}
       {field.helpText && <p className="text-xs text-muted-foreground">{field.helpText}</p>}
     </div>
@@ -1346,6 +1393,10 @@ function CreateUserPanel({
       toast.error("Username is required.");
       return;
     }
+    if (form.phoneNumber && !isValidPhoneNumber(form.phoneNumber)) {
+      toast.error(PHONE_NUMBER_ERROR);
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await api<{ id: string; onboardingSent: boolean; onboardingError?: string }>("/api/hr/users", {
@@ -1355,7 +1406,7 @@ function CreateUserPanel({
           email: form.email.trim().toLocaleLowerCase() || undefined,
           firstName: form.firstName || undefined,
           lastName: form.lastName || undefined,
-          phoneNumber: form.phoneNumber || undefined,
+          phoneNumber: form.phoneNumber ? normalizePhoneNumber(form.phoneNumber) : undefined,
           attributes: {
             ...Object.fromEntries([
               ["employee_id", form.employeeId],
@@ -1426,8 +1477,18 @@ function CreateUserPanel({
             <Input
               id="phone"
               value={form.phoneNumber}
-              onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
+              onChange={(e) => setForm({ ...form, phoneNumber: formatPhoneNumberInput(e.target.value) })}
+              inputMode="numeric"
+              maxLength={12}
+              placeholder="98765 43210"
             />
+            {form.phoneNumber && !isValidPhoneNumber(form.phoneNumber) && (
+              <p className="text-xs font-medium text-destructive" role="alert">{PHONE_NUMBER_ERROR}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Indian mobile numbers only. Enter 10 digits without +91 or a leading 0; displayed as 5 + 5.
+              International numbers are not supported.
+            </p>
           </div>
           <div className="space-y-1.5"><Label htmlFor="employeeId">Employee ID</Label>
             <Input id="employeeId" value={form.employeeId}

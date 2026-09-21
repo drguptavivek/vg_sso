@@ -5,6 +5,7 @@ import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
@@ -24,6 +25,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import org.keycloak.models.ClientModel;
+import org.keycloak.models.AuthenticationExecutionModel;
+import org.keycloak.models.AuthenticationFlowModel;
+import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.RoleModel;
@@ -37,6 +41,8 @@ public class PhoneOtpAdminResourceProvider implements RealmResourceProvider {
   private static final String ENV_TEST_API_ENABLED = "KC_OTP_TEST_API_ENABLED";
   private static final String ENV_TEST_API_ALLOWED_HOSTS = "KC_OTP_TEST_API_ALLOWED_HOSTS";
   private static final ConcurrentHashMap<String, TokenRecord> TOKENS = new ConcurrentHashMap<>();
+  private static final String TEST_MESSAGE =
+      "AIIMS SSO test SMS: your registered mobile number can receive OTP messages. No action is required.";
 
   private final KeycloakSession session;
   private final SmsHttpSender smsSender;
@@ -453,6 +459,67 @@ public class PhoneOtpAdminResourceProvider implements RealmResourceProvider {
   }
 
   @POST
+  @Path("users/{userId}/test-sms")
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response sendUserTestSms(@PathParam("userId") String userId) {
+    AuthContext auth = authenticateAdminContext();
+    if (!auth.authenticated) {
+      return Response.status(auth.status).entity(Map.of("ok", false, "error", auth.message)).build();
+    }
+    if (!(auth.manageRealm || auth.userManager)) {
+      return Response.status(Response.Status.FORBIDDEN)
+          .entity(Map.of("ok", false, "error", "manage-realm or user-manager role is required"))
+          .build();
+    }
+
+    UserModel target = session.users().getUserById(auth.realm, userId);
+    if (target == null) {
+      return Response.status(Response.Status.NOT_FOUND)
+          .entity(Map.of("ok", false, "error", "User not found"))
+          .build();
+    }
+    String mobile = PhoneOtpAuthenticator.normalizePhone(target.getFirstAttribute("phone_number"));
+    if (mobile == null) {
+      return Response.status(Response.Status.BAD_REQUEST)
+          .entity(Map.of("ok", false, "error",
+              "The user must have a valid 10-digit Indian mobile number before a test SMS can be sent"))
+          .build();
+    }
+
+    AuthenticatorConfigModel cfg = activePhoneOtpConfig(auth.realm);
+    if (cfg == null) {
+      return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+          .entity(Map.of("ok", false, "error", "The active browser flow has no configured phone OTP execution"))
+          .build();
+    }
+    Map<String, String> values = cfg.getConfig();
+    String primary = values.getOrDefault("otp.endpoint.primary", "");
+    if (primary.isBlank()) {
+      return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+          .entity(Map.of("ok", false, "error", "The phone OTP SMS endpoint is not configured"))
+          .build();
+    }
+
+    String backup = values.getOrDefault("otp.endpoint.backup", "");
+    String bearer = values.getOrDefault("otp.auth.bearer", "");
+    String tokenHeader = values.getOrDefault("otp.request.token.header", "X-OTP-Token");
+    String mobileField = values.getOrDefault("otp.sms.mobile.field", "mobile");
+    String messageField = values.getOrDefault("otp.sms.message.field", "message");
+    int retries = parseInt(values.get("otp.retry.max"), 2);
+    int backoffMs = parseInt(values.get("otp.retry.backoff.ms"), 500);
+    Map<String, Object> payload = SmsHttpSender.buildSmsPayload(mobileField, messageField, mobile, TEST_MESSAGE);
+    boolean sent = smsSender.sendWithRetry(
+        primary, backup, bearer, tokenHeader, UUID.randomUUID().toString(), payload,
+        retries, backoffMs, target.getUsername(), target.getId());
+    if (!sent) {
+      return Response.status(Response.Status.BAD_GATEWAY)
+          .entity(Map.of("ok", false, "error", "The SMS provider rejected the test message"))
+          .build();
+    }
+    return Response.ok(Map.of("ok", true, "message", "Test SMS sent", "mobile", maskMobile(mobile))).build();
+  }
+
+  @POST
   @Path("token")
   @Produces(MediaType.APPLICATION_JSON)
   public Response generateToken() {
@@ -616,6 +683,38 @@ public class PhoneOtpAdminResourceProvider implements RealmResourceProvider {
 
   private static String defaultIfBlank(String v, String d) {
     return isBlank(v) ? d : v;
+  }
+
+  private AuthenticatorConfigModel activePhoneOtpConfig(RealmModel realm) {
+    AuthenticationFlowModel browserFlow = realm.getBrowserFlow();
+    return browserFlow == null ? null : findPhoneOtpConfig(realm, browserFlow.getId(), new HashSet<>());
+  }
+
+  private AuthenticatorConfigModel findPhoneOtpConfig(RealmModel realm, String flowId, Set<String> visited) {
+    if (flowId == null || !visited.add(flowId)) return null;
+    List<AuthenticationExecutionModel> executions = realm.getAuthenticationExecutionsStream(flowId).toList();
+    for (AuthenticationExecutionModel execution : executions) {
+      if (execution.isAuthenticatorFlow()) {
+        AuthenticatorConfigModel nested = findPhoneOtpConfig(realm, execution.getFlowId(), visited);
+        if (nested != null) return nested;
+      } else if (PhoneOtpAuthenticatorFactory.PROVIDER_ID.equals(execution.getAuthenticator())) {
+        String configId = execution.getAuthenticatorConfig();
+        return configId == null ? null : realm.getAuthenticatorConfigById(configId);
+      }
+    }
+    return null;
+  }
+
+  private static int parseInt(String value, int fallback) {
+    try {
+      return value == null ? fallback : Integer.parseInt(value);
+    } catch (NumberFormatException ignored) {
+      return fallback;
+    }
+  }
+
+  private static String maskMobile(String mobile) {
+    return "*****" + mobile.substring(5);
   }
 
   private static String escapeHtml(String value) {

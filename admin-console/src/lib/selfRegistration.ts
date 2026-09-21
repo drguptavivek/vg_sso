@@ -4,6 +4,7 @@ import { and, count, eq, gt, gte } from "drizzle-orm";
 import { adminDatabase } from "@/db/client";
 import { selfRegistrationAttempts, type SelfRegistrationAttempt } from "@/db/schema";
 import type { HrmsEmployeeRecord } from "@/types/hrms";
+import { normalizePhoneNumber } from "@/lib/phoneNumber";
 
 const DEFAULT_TOKEN_MINUTES = 10;
 const DEFAULT_IP_LIMIT = 10;
@@ -37,10 +38,7 @@ export function normalizeEmployeeId(value: string): string {
 }
 
 export function normalizePhone(value: string | null): string {
-  if (!value) return "";
-  const digits = value.replace(/\D/g, "");
-  if (digits.length === 12 && digits.startsWith("91")) return digits.slice(2);
-  return digits;
+  return normalizePhoneNumber(value);
 }
 
 export function normalizeEmail(value: string | null): string {

@@ -328,11 +328,11 @@ cat >"$profile_payload" <<'JSON'
       },
       "validations": {
         "length": {
-          "max": 20
+          "max": 10
         },
         "pattern": {
-          "pattern": "^\\+?[0-9]{10,15}$",
-          "error-message": "Invalid phone number"
+          "pattern": "^[6-9][0-9]{9}$",
+          "error-message": "Enter a valid 10-digit Indian mobile number; international numbers are not supported"
         }
       },
       "multivalued": false

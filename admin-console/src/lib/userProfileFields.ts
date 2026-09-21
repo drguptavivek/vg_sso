@@ -28,9 +28,10 @@ export const USER_PROFILE_FIELDS: readonly UserProfileField[] = [
     label: "Phone number",
     source: "attribute",
     control: "text",
-    maxLength: 20,
-    pattern: "^\\+?[0-9]{10,15}$",
-    placeholder: "+919876543210",
+    maxLength: 12,
+    pattern: "^[6-9][0-9]{4} [0-9]{5}$",
+    placeholder: "98765 43210",
+    helpText: "Indian mobile numbers only. Enter 10 digits without +91 or a leading 0; legacy prefixes are removed automatically.",
   },
   {
     name: "phone_verified",

@@ -11,6 +11,7 @@ import { recordAdminAction } from "@/db/actionLog";
 import { fetchHrmsEmployee } from "@/lib/hrms/client";
 import { extensionFromHrms } from "@/lib/hrms/mapping";
 import { normalizeEmail } from "@/lib/selfRegistration";
+import { isValidPhoneNumber, normalizePhoneNumber, PHONE_NUMBER_ERROR } from "@/lib/phoneNumber";
 import type { KcUser } from "@/types/keycloak";
 
 interface RouteParams {
@@ -69,6 +70,13 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const email = body.email === undefined ? undefined : normalizeEmail(body.email);
 
   const submittedAttributes = body.attributes ?? {};
+  const submittedPhone = submittedAttributes.phone_number?.[0];
+  if (submittedPhone) {
+    if (!isValidPhoneNumber(submittedPhone)) {
+      return NextResponse.json({ error: PHONE_NUMBER_ERROR }, { status: 400 });
+    }
+    submittedAttributes.phone_number = [normalizePhoneNumber(submittedPhone)];
+  }
   const unsupported = Object.keys(submittedAttributes).filter(
     (name) => !USER_PROFILE_ATTRIBUTE_FIELDS.has(name),
   );

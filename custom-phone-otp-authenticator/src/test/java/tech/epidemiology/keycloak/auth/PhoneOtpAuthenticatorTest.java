@@ -25,9 +25,20 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(MockitoExtension.class)
 class PhoneOtpAuthenticatorTest {
+
+    @Test
+    void testNormalizePhone_AcceptsSupportedLegacyFormats() {
+        assertEquals("9876543210", PhoneOtpAuthenticator.normalizePhone("9876543210"));
+        assertEquals("9876543210", PhoneOtpAuthenticator.normalizePhone("09876543210"));
+        assertEquals("9876543210", PhoneOtpAuthenticator.normalizePhone("+919876543210"));
+        assertEquals("9876543210", PhoneOtpAuthenticator.normalizePhone("98765 43210"));
+        assertNull(PhoneOtpAuthenticator.normalizePhone("12345"));
+        assertNull(PhoneOtpAuthenticator.normalizePhone("4412345678"));
+    }
 
     private PhoneOtpAuthenticator authenticator;
 
@@ -105,7 +116,22 @@ class PhoneOtpAuthenticatorTest {
         
         verify(context).challenge(any());
         verify(smsSender).sendWithRetry(any(), any(), any(), any(), any(), any(), anyInt(), anyInt(), any(), any());
+        verify(smsSender).sendWithRetry(any(), any(), any(), any(), any(),
+                argThat(payload -> "9876543210".equals(payload.get("mobile"))),
+                anyInt(), anyInt(), any(), any());
         verify(formsProvider).createForm("login-phone-otp.ftl");
+    }
+
+    @Test
+    void testAuthenticate_InvalidPhoneShowsClearError() {
+        when(user.getFirstAttribute("phone_verified")).thenReturn("false");
+        when(user.getFirstAttribute("phone_number")).thenReturn("12345");
+
+        authenticator.authenticate(context);
+
+        verify(formsProvider).setError("A valid 10-digit Indian mobile number is required. International numbers are not supported. Contact an administrator.");
+        verify(context).failureChallenge(eq(AuthenticationFlowError.INVALID_USER), any());
+        verifyNoInteractions(smsSender);
     }
 
     @Test
