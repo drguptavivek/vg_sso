@@ -14,6 +14,17 @@ export interface KcUser {
   requiredActions?: string[];
 }
 
+export interface KcUserSession {
+  id: string;
+  username?: string;
+  userId?: string;
+  ipAddress?: string;
+  start?: number;
+  lastAccess?: number;
+  rememberMe?: boolean;
+  clients?: Record<string, string>;
+}
+
 export interface KcGroup {
   id: string;
   name: string;

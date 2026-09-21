@@ -7,7 +7,7 @@ import {
   Loader2, Phone, PhoneOff, Plus, RefreshCw, Search, ShieldCheck, ShieldX,
   SlidersHorizontal, UserRound,
 } from "lucide-react";
-import type { KcGroup, KcUser } from "@/types/keycloak";
+import type { KcGroup, KcUser, KcUserSession } from "@/types/keycloak";
 import type { HrmsEmployeeRecord, HrmsLookupResult } from "@/types/hrms";
 import {
   USER_PROFILE_FIELDS,
@@ -878,10 +878,108 @@ function UserProfilePanel({
                 {groups.length === 0 && <span className="text-sm text-muted-foreground">No group memberships.</span>}
               </div>
             </div>
+            <UserSessionsPanel user={displayed} />
           </>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function sessionTime(value?: number): string {
+  if (!value) return "Unknown";
+  const milliseconds = value < 1_000_000_000_000 ? value * 1000 : value;
+  return new Date(milliseconds).toLocaleString();
+}
+
+function UserSessionsPanel({ user }: { user: KcUser }) {
+  const [sessions, setSessions] = useState<KcUserSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [revoking, setRevoking] = useState<string | null>(null);
+
+  const loadSessions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await api<{ sessions: KcUserSession[] }>(`/api/hr/users/${user.id}/sessions`);
+      setSessions(result.sessions);
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [user.id]);
+
+  useEffect(() => { void loadSessions(); }, [loadSessions]);
+
+  async function revokeOne(session: KcUserSession) {
+    const clients = Object.values(session.clients ?? {}).join(", ") || "unknown application";
+    if (!window.confirm(`Terminate this session for ${user.username}?\n\nApplication: ${clients}\nIP: ${session.ipAddress ?? "unknown"}`)) return;
+    setRevoking(session.id);
+    try {
+      await api(`/api/hr/users/${user.id}/sessions/${encodeURIComponent(session.id)}`, { method: "DELETE" });
+      toast.success(`Session terminated for ${user.username}.`);
+      await loadSessions();
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setRevoking(null);
+    }
+  }
+
+  async function revokeAll() {
+    if (!window.confirm(`Log ${user.username} out of all applications and revoke all ${sessions.length} active session${sessions.length === 1 ? "" : "s"}?`)) return;
+    setRevoking("all");
+    try {
+      const result = await api<{ revokedSessions: number }>(`/api/hr/users/${user.id}/sessions`, { method: "DELETE" });
+      toast.success(`Revoked ${result.revokedSessions} session${result.revokedSessions === 1 ? "" : "s"} for ${user.username}.`);
+      await loadSessions();
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setRevoking(null);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium">Active sessions</p>
+          <p className="text-xs text-muted-foreground">Review where this account is signed in and terminate access when required.</p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" disabled={loading || revoking !== null} onClick={() => void loadSessions()}>
+            <RefreshCw className={loading ? "animate-spin" : ""} /> Refresh
+          </Button>
+          <Button size="sm" variant="destructive" disabled={!sessions.length || revoking !== null} onClick={() => void revokeAll()}>
+            {revoking === "all" && <Loader2 className="animate-spin" />} Log out everywhere
+          </Button>
+        </div>
+      </div>
+      {loading ? (
+        <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="animate-spin" /> Loading sessions...</div>
+      ) : sessions.length === 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">No active sessions.</p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {sessions.map((session) => (
+            <div key={session.id} className="flex flex-col justify-between gap-3 rounded-md border bg-muted/20 p-3 sm:flex-row sm:items-center">
+              <div className="min-w-0 text-sm">
+                <p className="font-medium">{Object.values(session.clients ?? {}).join(", ") || "Unknown application"}</p>
+                <p className="text-xs text-muted-foreground">
+                  IP {session.ipAddress ?? "unknown"} · Started {sessionTime(session.start)} · Last active {sessionTime(session.lastAccess)}
+                  {session.rememberMe ? " · Remember me" : ""}
+                </p>
+                <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground" title={session.id}>Session {session.id.slice(0, 12)}…</p>
+              </div>
+              <Button size="sm" variant="outline" disabled={revoking !== null} onClick={() => void revokeOne(session)}>
+                {revoking === session.id && <Loader2 className="animate-spin" />} Terminate session
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
