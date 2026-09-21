@@ -85,6 +85,39 @@ export const selfRegistrationAttempts = pgTable("self_registration_attempts", {
   index("self_registration_attempts_status_expiry_idx").on(table.status, table.expiresAt),
 ]);
 
+
+export const clientApplicationType = pgEnum("client_application_type", ["spa", "server-web", "native", "m2m"]);
+export const clientEnvironment = pgEnum("client_environment", ["development", "staging", "production"]);
+export const clientManagementStatus = pgEnum("client_management_status", ["provisioning", "active", "provisioning_failed", "suspended"]);
+
+export const clientMetadata = pgTable("client_metadata", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  keycloakClientUuid: varchar("keycloak_client_uuid", { length: 128 }).notNull().unique(),
+  clientId: varchar("client_id", { length: 128 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 255 }),
+  description: varchar("description", { length: 2000 }),
+  environment: clientEnvironment("environment").notNull(),
+  applicationType: clientApplicationType("application_type").notNull(),
+  businessOwner: varchar("business_owner", { length: 255 }),
+  technicalOwner: varchar("technical_owner", { length: 255 }),
+  primaryContactEmail: varchar("primary_contact_email", { length: 320 }),
+  secondaryContactEmail: varchar("secondary_contact_email", { length: 320 }),
+  supportContact: varchar("support_contact", { length: 320 }),
+  justification: varchar("justification", { length: 2000 }),
+  status: clientManagementStatus("status").notNull().default("provisioning"),
+  createdBy: uuid("created_by").notNull(),
+  approvedBy: uuid("approved_by"),
+  onboardingPackVersion: varchar("onboarding_pack_version", { length: 64 }),
+  roleApiStatus: varchar("role_api_status", { length: 32 }).notNull().default("not_available"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("client_metadata_environment_idx").on(table.environment),
+  index("client_metadata_status_idx").on(table.status),
+]);
+export type ClientMetadata = typeof clientMetadata.$inferSelect;
+export type NewClientMetadata = typeof clientMetadata.$inferInsert;
+
 export type UserExtension = typeof userExtensions.$inferSelect;
 export type NewUserExtension = typeof userExtensions.$inferInsert;
 export type UserAdditionalContact = typeof userAdditionalContacts.$inferSelect;

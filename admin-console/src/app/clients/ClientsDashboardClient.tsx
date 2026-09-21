@@ -1,200 +1,88 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { signOut } from "next-auth/react";
-import { Boxes, Loader2, Search, ShieldCheck, Users } from "lucide-react";
+import { AlertTriangle, Boxes, Check, Download, FileCheck2, Loader2, Plus, Search, ShieldCheck, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { SignOutButton } from "@/components/SignOutButton";
 import type { KcClient, KcGroup, KcUser } from "@/types/keycloak";
 
-interface ClientRow extends KcClient {
-  appRolesGroup: KcGroup | null;
-  administrators: KcUser[];
-  roleGroups: KcGroup[];
-  roleGroupCount: number;
-}
+type ClientTemplate = "spa" | "server-web" | "native" | "m2m";
+type Environment = "development" | "staging" | "production";
+interface Finding { level?: string; severity?: string; message?: string; title?: string; code?: string }
+interface Validation { valid?: boolean; findings?: Finding[]; errors?: string[]; warnings?: string[] }
+interface Metadata { template?: ClientTemplate; environment?: Environment; businessOwner?: string; technicalOwner?: string; primaryContactEmail?: string; secondaryContactEmail?: string; supportContact?: string; [key: string]: unknown }
+interface ClientRow extends KcClient { appRolesGroup: KcGroup | null; administrators: KcUser[]; roleGroups: KcGroup[]; roleGroupCount: number; metadata?: Metadata; validation?: Validation; redirectUris?: string[]; postLogoutRedirectUris?: string[]; webOrigins?: string[] }
+interface ClientForm { template: ClientTemplate; clientId: string; name: string; description: string; environment: Environment; businessOwner: string; technicalOwner: string; primaryContactEmail: string; secondaryContactEmail: string; supportContact: string; initialAdministratorUserId: string; redirectUris: string; postLogoutRedirectUris: string; webOrigins: string }
+
+const emptyForm: ClientForm = { template: "spa", clientId: "", name: "", description: "", environment: "development", businessOwner: "", technicalOwner: "", primaryContactEmail: "", secondaryContactEmail: "", supportContact: "", initialAdministratorUserId: "", redirectUris: "", postLogoutRedirectUris: "", webOrigins: "" };
+const templates: Record<ClientTemplate, { label: string; description: string; defaults: string[] }> = {
+  spa: { label: "Browser SPA", description: "Browser application using Authorization Code with PKCE.", defaults: ["Public client", "Authorization Code enabled", "PKCE S256 required", "Implicit and password grants disabled"] },
+  "server-web": { label: "Server-side web", description: "Confidential web application with a server-side session.", defaults: ["Confidential client", "Authorization Code enabled", "PKCE S256 required", "Implicit and password grants disabled"] },
+  native: { label: "Native / mobile", description: "Native application using a loopback or claimed HTTPS redirect.", defaults: ["Public client", "Authorization Code enabled", "PKCE S256 required", "Implicit and password grants disabled"] },
+  m2m: { label: "Machine-to-machine", description: "Backend service using client credentials.", defaults: ["Confidential client", "Service account enabled", "Private-key authentication preferred", "Implicit and password grants disabled"] },
+};
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
   const body = await response.json().catch(() => ({}));
-  if (response.status === 401) {
-    await signOut({ redirect: false });
-    window.location.replace("/");
-    return await new Promise<T>(() => undefined);
-  }
+  if (response.status === 401) { await signOut({ redirect: false }); window.location.replace("/"); return await new Promise<T>(() => undefined); }
   if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : `Request failed (${response.status})`);
   return body as T;
 }
+const splitLines = (value: string) => value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+const formFor = (client?: ClientRow | null): ClientForm => ({ template: client?.metadata?.template ?? "spa", clientId: client?.clientId ?? "", name: client?.name ?? "", description: client?.description ?? "", environment: client?.metadata?.environment ?? "development", businessOwner: client?.metadata?.businessOwner ?? "", technicalOwner: client?.metadata?.technicalOwner ?? "", primaryContactEmail: client?.metadata?.primaryContactEmail ?? "", secondaryContactEmail: client?.metadata?.secondaryContactEmail ?? "", supportContact: client?.metadata?.supportContact ?? "", initialAdministratorUserId: "", redirectUris: (client?.redirectUris ?? []).join("\n"), postLogoutRedirectUris: (client?.postLogoutRedirectUris ?? []).join("\n"), webOrigins: (client?.webOrigins ?? []).join("\n") });
 
-export default function ClientsDashboardClient({
-  username,
-  canManageAdministrators,
-  isRealmAdmin,
-}: {
-  username: string;
-  canManageAdministrators: boolean;
-  isRealmAdmin: boolean;
-}) {
+export default function ClientsDashboardClient({ username, canManageAdministrators, canManageClients = canManageAdministrators, isRealmAdmin }: { username: string; canManageAdministrators: boolean; canManageClients?: boolean; isRealmAdmin: boolean }) {
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [selected, setSelected] = useState<ClientRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<ClientForm>(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [action, setAction] = useState("");
   const [userQuery, setUserQuery] = useState("");
-  const [results, setResults] = useState<KcUser[]>([]);
+  const [userResults, setUserResults] = useState<KcUser[]>([]);
+  const [download, setDownload] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await api<{ clients: ClientRow[] }>("/api/clients");
-      setClients(data.clients);
-      setSelectedId((current) => current || data.clients[0]?.id || "");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  const load = useCallback(async () => { setLoading(true); try { const data = await api<{ clients: ClientRow[] }>("/api/clients"); setClients(data.clients ?? []); setSelectedId((current) => current || data.clients?.[0]?.id || ""); } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); } finally { setLoading(false); } }, []);
+  const loadDetail = useCallback(async (id: string) => { if (!id) return; setDetailLoading(true); try { const data = await api<{ client?: ClientRow }>(`/api/clients/${encodeURIComponent(id)}`); if (data.client) setSelected(data.client); } catch { const fallback = clients.find((client) => client.id === id); if (fallback) setSelected(fallback); } finally { setDetailLoading(false); } }, [clients]);
   useEffect(() => { void load(); }, [load]);
+  const filtered = useMemo(() => { const value = query.trim().toLowerCase(); return clients.filter((client) => !value || client.clientId.toLowerCase().includes(value) || client.name?.toLowerCase().includes(value)); }, [clients, query]);
+  useEffect(() => { const row = clients.find((client) => client.id === selectedId) ?? filtered[0] ?? null; if (row) setSelected((current) => current?.id === row.id ? current : row); if (selectedId) void loadDetail(selectedId); }, [clients, filtered, loadDetail, selectedId]);
+  const update = <K extends keyof ClientForm>(key: K, value: ClientForm[K]) => setForm((current) => ({ ...current, [key]: value }));
 
-  const filtered = clients.filter((client) => {
-    const value = query.trim().toLowerCase();
-    return !value || client.clientId.toLowerCase().includes(value) || client.name?.toLowerCase().includes(value);
-  });
-  const selected = clients.find((client) => client.id === selectedId) ?? filtered[0] ?? null;
+  const searchUsers = async (value: string) => { setUserQuery(value); if (!value.trim()) return setUserResults([]); try { const data = await api<{ users: KcUser[] }>(`/api/pca/users-search?search=${encodeURIComponent(value)}`); const existing = new Set(selected?.administrators.map((user) => user.id) ?? []); setUserResults((data.users ?? []).filter((user) => !existing.has(user.id))); } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); } };
+  const save = async () => { if (!form.clientId.trim() || !form.name.trim()) return toast.error("Client ID and application name are required."); if (form.template !== "m2m" && !splitLines(form.redirectUris).length) return toast.error("Add at least one redirect URI."); setSaving(true); try { const payload = { template: form.template, clientId: form.clientId.trim(), name: form.name.trim(), description: form.description.trim() || undefined, environment: form.environment, redirectUris: splitLines(form.redirectUris), postLogoutRedirectUris: splitLines(form.postLogoutRedirectUris), webOrigins: splitLines(form.webOrigins), businessOwner: form.businessOwner.trim() || undefined, technicalOwner: form.technicalOwner.trim() || undefined, primaryContactEmail: form.primaryContactEmail.trim() || undefined, secondaryContactEmail: form.secondaryContactEmail.trim() || undefined, supportContact: form.supportContact.trim() || undefined, initialAdministratorUserId: form.initialAdministratorUserId || undefined }; const result = editing && selected ? await api<{ client?: ClientRow }>(`/api/clients/${encodeURIComponent(selected.id)}`, { method: "PATCH", body: JSON.stringify(payload) }) : await api<{ client?: ClientRow }>("/api/clients", { method: "POST", body: JSON.stringify(payload) }); toast.success(editing ? "Client configuration updated." : "Client provisioned with secure defaults."); setDialogOpen(false); await load(); if (result.client?.id) setSelectedId(result.client.id); } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); } finally { setSaving(false); } };
+  const securityAction = async (kind: "validate" | "suspend" | "resume") => { if (!selected) return; setAction(kind); try { const result = await api<{ client?: ClientRow; validation?: Validation }>(`/api/clients/${encodeURIComponent(selected.id)}/${kind}`, { method: "POST" }); setSelected((current) => current ? { ...current, ...(result.client ?? {}), validation: result.validation ?? current.validation } : current); toast.success(kind === "validate" ? "Security validation completed." : `Client ${kind === "suspend" ? "suspended" : "resumed"}.`); await load(); } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); } finally { setAction(""); } };
+  const addAdmin = async (user: KcUser) => { if (!selected) return; try { await api(`/api/clients/${encodeURIComponent(selected.id)}/administrators`, { method: "PUT", body: JSON.stringify({ userId: user.id }) }); setUserQuery(""); setUserResults([]); toast.success(`${user.username} is now a client administrator.`); await load(); await loadDetail(selected.id); } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); } };
+  const removeAdmin = async (user: KcUser) => { if (!selected) return; try { await api(`/api/clients/${encodeURIComponent(selected.id)}/administrators`, { method: "DELETE", body: JSON.stringify({ userId: user.id }) }); toast.success(`Removed ${user.username} from client administrators.`); await load(); await loadDetail(selected.id); } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); } };
+  const downloadPack = async (format: "markdown" | "json" | "env" | "openapi") => { if (!selected) return; setDownload(format); try { const response = await fetch(`/api/clients/${encodeURIComponent(selected.id)}/onboarding-pack?format=${format}`); if (!response.ok) throw new Error(`Download failed (${response.status})`); const blob = await response.blob(); const href = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = href; anchor.download = `${selected.clientId}-onboarding.${format === "openapi" ? "yaml" : format === "env" ? "example" : format}`; document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(href); } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); } finally { setDownload(""); } };
 
-  async function searchUsers(value: string) {
-    setUserQuery(value);
-    if (!value.trim()) return setResults([]);
-    try {
-      const data = await api<{ users: KcUser[] }>(`/api/pca/users-search?search=${encodeURIComponent(value)}`);
-      const existing = new Set(selected?.administrators.map((user) => user.id) ?? []);
-      setResults(data.users.filter((user) => !existing.has(user.id)));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  async function addAdministrator(user: KcUser) {
-    if (!selected?.appRolesGroup?.id) return;
-    try {
-      await api(`/api/pca/groups/${selected.appRolesGroup.id}/members`, {
-        method: "POST",
-        body: JSON.stringify({ userId: user.id }),
-      });
-      setUserQuery("");
-      setResults([]);
-      toast.success(`${user.username} is now an administrator for ${selected.clientId}.`);
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  async function removeAdministrator(user: KcUser) {
-    if (!selected?.appRolesGroup?.id) return;
-    try {
-      await api(`/api/pca/groups/${selected.appRolesGroup.id}/members/${user.id}`, { method: "DELETE" });
-      toast.success(`Removed ${user.username} from ${selected.clientId} administrators.`);
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Registered clients</h1>
-          <p className="text-sm text-muted-foreground">Client, AppRoles and administrator audit · Signed in as {username}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" asChild><a href="/hr">HR users</a></Button>
-          <Button variant="outline" asChild><a href="/groups">Groups</a></Button>
-          <Button variant="outline" asChild><a href="/audit">My activity</a></Button>
-          {isRealmAdmin && <Button variant="outline" asChild><a href="/realm-roles">Realm roles</a></Button>}
-          <SignOutButton />
-        </div>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base"><Boxes className="h-4 w-4" /> Clients</CardTitle>
-            <CardDescription>{clients.length} registered application clients</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter clients..." className="mb-3" />
-            {loading ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading...</p> : (
-              <div className="max-h-[650px] space-y-2 overflow-y-auto">
-                {filtered.map((client) => (
-                  <button key={client.id} type="button" onClick={() => setSelectedId(client.id)}
-                    className={`w-full rounded-lg border p-3 text-left ${selected?.id === client.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}>
-                    <span className="block truncate font-medium">{client.clientId}</span>
-                    <span className="mt-1 flex gap-1">
-                      <Badge variant={client.enabled === false ? "secondary" : "success"}>{client.enabled === false ? "Disabled" : "Enabled"}</Badge>
-                      <Badge variant={client.appRolesGroup ? "outline" : "destructive"}>{client.appRolesGroup ? "AppRoles" : "No AppRoles"}</Badge>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{selected?.clientId ?? "Select a client"}</CardTitle>
-            <CardDescription>{selected?.name || selected?.description || "Registered OpenID Connect client"}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {selected && <>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Summary label="Protocol" value={selected.protocol ?? "Not specified"} />
-                <Summary label="AppRoles group" value={selected.appRolesGroup?.path ?? "Not present"} />
-                <Summary label="Role subgroups" value={String(selected.roleGroupCount)} />
-              </div>
-              <section>
-                <h2 className="mb-3 flex items-center gap-2 font-semibold"><ShieldCheck className="h-4 w-4" /> Client administrators</h2>
-                <div className="space-y-2">
-                  {selected.administrators.map((user) => (
-                    <div key={user.id} className="flex items-center justify-between rounded-lg border p-3">
-                      <div><p className="font-medium">{user.username}</p><p className="text-xs text-muted-foreground">{user.email || "No email"}</p></div>
-                      {canManageAdministrators && <Button size="sm" variant="outline" onClick={() => removeAdministrator(user)}>Remove</Button>}
-                    </div>
-                  ))}
-                  {selected.administrators.length === 0 && <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No direct client administrators.</p>}
-                </div>
-              </section>
-              <section>
-                <h2 className="mb-3 font-semibold">Application role groups</h2>
-                <div className="flex flex-wrap gap-2">
-                  {selected.roleGroups.map((group) => <Badge key={group.id} variant="outline">{group.name}</Badge>)}
-                  {selected.roleGroups.length === 0 && <span className="text-sm text-muted-foreground">No direct application-role subgroups.</span>}
-                </div>
-              </section>
-              {canManageAdministrators && selected.appRolesGroup && (
-                <section className="space-y-2 border-t pt-4">
-                  <label className="text-sm font-medium">Add an existing user as client administrator</label>
-                  <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={userQuery} onChange={(event) => void searchUsers(event.target.value)} placeholder="Search username, name or email..." /></div>
-                  {results.length > 0 && <div className="rounded-lg border p-1">
-                    {results.map((user) => <button key={user.id} type="button" onClick={() => addAdministrator(user)} className="flex w-full items-center gap-2 rounded p-2 text-left hover:bg-muted"><Users className="h-4 w-4" /><span>{user.username}</span><span className="text-xs text-muted-foreground">{user.email}</span></button>)}
-                  </div>}
-                </section>
-              )}
-            </>}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
+  const findings: Finding[] = selected?.validation?.findings ?? [...(selected?.validation?.errors ?? []).map((message): Finding => ({ level: "error", message })), ...(selected?.validation?.warnings ?? []).map((message): Finding => ({ level: "warning", message }))];
+  return <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 sm:p-6">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-semibold tracking-tight">Client management</h1><p className="text-sm text-muted-foreground">Provision secure OIDC clients and manage their AppRoles boundary · Signed in as {username}</p></div><div className="flex flex-wrap gap-2">{canManageClients && <Button onClick={() => { setEditing(false); setForm(emptyForm); setUserQuery(""); setDialogOpen(true); }}><Plus className="h-4 w-4" /> New client</Button>}<Button variant="outline" asChild><a href="/hr">HR users</a></Button><Button variant="outline" asChild><a href="/groups">Groups</a></Button><Button variant="outline" asChild><a href="/audit">My activity</a></Button>{isRealmAdmin && <Button variant="outline" asChild><a href="/realm-roles">Realm roles</a></Button>}<SignOutButton /></div></div>
+    {!canManageClients && <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Read-only client visibility. Client-manager or realm-admin is required for provisioning and security actions.</div>}
+    <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]"><Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Boxes className="h-4 w-4" /> Clients</CardTitle><CardDescription>{clients.length} registered application clients</CardDescription></CardHeader><CardContent><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter clients..." className="mb-3" />{loading ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading...</p> : <div className="max-h-[700px] space-y-2 overflow-y-auto">{filtered.map((client) => <button key={client.id} type="button" onClick={() => setSelectedId(client.id)} className={`w-full rounded-lg border p-3 text-left ${selected?.id === client.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}><span className="block truncate font-medium">{client.clientId}</span><span className="mt-1 flex flex-wrap gap-1"><Badge variant={client.enabled === false ? "secondary" : "success"}>{client.enabled === false ? "Disabled" : "Enabled"}</Badge><Badge variant={client.appRolesGroup ? "outline" : "destructive"}>{client.appRolesGroup ? "AppRoles" : "No AppRoles"}</Badge>{client.metadata?.environment && <Badge variant="outline">{client.metadata.environment}</Badge>}</span></button>)}{!filtered.length && <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No clients match this filter.</p>}</div>}</CardContent></Card>
+    <Card><CardHeader className="flex-row items-start justify-between gap-4"><div><CardTitle>{selected?.clientId ?? "Select a client"}</CardTitle><CardDescription>{selected?.name || selected?.description || "Registered OpenID Connect client"}</CardDescription></div>{detailLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}</CardHeader><CardContent className="space-y-6">{selected ? <><div className="flex flex-wrap gap-2">{canManageClients && <Button size="sm" variant="outline" onClick={() => { setEditing(true); setForm(formFor(selected)); setDialogOpen(true); }}>Edit configuration</Button>}{canManageClients && <Button size="sm" variant="outline" onClick={() => void securityAction("validate")} disabled={Boolean(action)}><FileCheck2 className="h-4 w-4" />{action === "validate" ? "Validating..." : "Validate security"}</Button>}{canManageClients && selected.enabled !== false && <Button size="sm" variant="outline" onClick={() => void securityAction("suspend")} disabled={Boolean(action)}>Suspend</Button>}{canManageClients && selected.enabled === false && <Button size="sm" variant="outline" onClick={() => void securityAction("resume")} disabled={Boolean(action)}>Resume</Button>}</div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Summary label="Protocol" value={selected.protocol ?? "OpenID Connect"} /><Summary label="Template" value={templates[selected.metadata?.template ?? "spa"].label} /><Summary label="Environment" value={selected.metadata?.environment ?? "Not specified"} /><Summary label="AppRoles group" value={selected.appRolesGroup?.path ?? "Not present"} /></div><section className="rounded-lg border p-4"><div className="mb-3 flex items-center justify-between gap-2"><div><h2 className="flex items-center gap-2 font-semibold"><ShieldCheck className="h-4 w-4" /> Security posture</h2><p className="text-xs text-muted-foreground">Secure defaults are applied during provisioning; review findings before sharing integration details.</p></div><Badge variant={selected.validation?.valid === false ? "destructive" : selected.validation?.valid ? "success" : "outline"}>{selected.validation?.valid === false ? "Action needed" : selected.validation?.valid ? "Validated" : "Not validated"}</Badge></div>{findings.length ? <div className="space-y-2">{findings.map((finding, index) => <div key={`${finding.code ?? finding.message ?? "finding"}-${index}`} className="flex items-start gap-2 text-sm"><FindingIcon level={finding.level ?? finding.severity} /><span>{finding.title ?? finding.message ?? finding.code ?? "Security finding"}</span></div>)}</div> : <p className="text-sm text-muted-foreground">Run validation to inspect PKCE, redirect URI, grant, and client-authentication defaults.</p>}</section><section><h2 className="mb-3 flex items-center gap-2 font-semibold"><ShieldCheck className="h-4 w-4" /> Client administrators</h2><div className="space-y-2">{selected.administrators.map((user) => <div key={user.id} className="flex items-center justify-between rounded-lg border p-3"><div><p className="font-medium">{user.username}</p><p className="text-xs text-muted-foreground">{user.email || "No email"}</p></div>{canManageAdministrators && <Button size="sm" variant="outline" onClick={() => void removeAdmin(user)}>Remove</Button>}</div>)}{selected.administrators.length === 0 && <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No direct client administrators.</p>}</div>{canManageAdministrators && selected.appRolesGroup && <div className="mt-4 space-y-2"><Label htmlFor="admin-search">Add an existing user as client administrator</Label><div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input id="admin-search" className="pl-9" value={userQuery} onChange={(event) => void searchUsers(event.target.value)} placeholder="Search username, name or email..." /></div>{userResults.length > 0 && <div className="rounded-lg border p-1">{userResults.map((user) => <button key={user.id} type="button" onClick={() => void addAdmin(user)} className="flex w-full items-center gap-2 rounded p-2 text-left hover:bg-muted"><UserPlus className="h-4 w-4" /><span>{user.username}</span><span className="text-xs text-muted-foreground">{user.email}</span></button>)}</div>}</div>}</section><section><h2 className="mb-3 font-semibold">Application role groups</h2><div className="flex flex-wrap gap-2">{selected.roleGroups.map((group) => <Badge key={group.id} variant="outline">{group.name}</Badge>)}{selected.roleGroups.length === 0 && <span className="text-sm text-muted-foreground">No direct application-role subgroups.</span>}</div><p className="mt-2 text-xs text-muted-foreground">External application-role API: Not available yet. It will be delivered in a later Keycloak SPI phase.</p></section><section className="rounded-lg border p-4"><h2 className="mb-1 flex items-center gap-2 font-semibold"><Download className="h-4 w-4" /> Developer onboarding pack</h2><p className="mb-3 text-sm text-muted-foreground">Download configuration-specific, non-secret integration material. Provisioning never sends email automatically.</p><div className="flex flex-wrap gap-2">{(["markdown", "json", "env", "openapi"] as const).map((format) => <Button key={format} size="sm" variant="outline" onClick={() => void downloadPack(format)} disabled={Boolean(download)}><Download className="h-3.5 w-3.5" />{download === format ? "Preparing..." : format === "env" ? ".env.example" : format.toUpperCase()}</Button>)}</div></section></> : <p className="text-sm text-muted-foreground">Select a client to inspect configuration and security posture.</p>}</CardContent></Card></div>
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle>{editing ? "Edit client configuration" : "Create secure OIDC client"}</DialogTitle><DialogDescription>{editing ? "Update allowlisted metadata and redirect settings. Secure protocol defaults remain enforced." : "Choose an approved template. The wizard applies secure OAuth defaults and never sends email automatically."}</DialogDescription></DialogHeader><Wizard form={form} update={update} editing={editing} saving={saving} onSave={() => void save()} onCancel={() => setDialogOpen(false)} userQuery={userQuery} results={userResults} onUserSearch={(value) => void searchUsers(value)} onPick={(user) => { update("initialAdministratorUserId", user.id); setUserQuery(user.username); setUserResults([]); }} /><DialogFooter /></DialogContent></Dialog>
+  </div>;
 }
 
-function Summary({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-lg border bg-muted/20 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 break-words text-sm font-medium">{value}</p></div>;
+function Wizard({ form, update, editing, saving, onSave, onCancel, userQuery, results, onUserSearch, onPick }: { form: ClientForm; update: <K extends keyof ClientForm>(key: K, value: ClientForm[K]) => void; editing: boolean; saving: boolean; onSave: () => void; onCancel: () => void; userQuery: string; results: KcUser[]; onUserSearch: (value: string) => void; onPick: (user: KcUser) => void }) {
+  const details = templates[form.template];
+  return <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2">{(Object.entries(templates) as [ClientTemplate, typeof templates[ClientTemplate]][]).map(([value, detail]) => <button key={value} type="button" onClick={() => update("template", value)} className={`rounded-lg border p-3 text-left ${form.template === value ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}><span className="font-medium">{detail.label}</span><span className="mt-1 block text-xs text-muted-foreground">{detail.description}</span></button>)}</div><div className="grid gap-4 sm:grid-cols-2"><Field label="Client ID" required><Input value={form.clientId} onChange={(event) => update("clientId", event.target.value)} disabled={editing} placeholder="aarogyam-doctor-dev" /></Field><Field label="Application name" required><Input value={form.name} onChange={(event) => update("name", event.target.value)} placeholder="Aarogyam Doctor" /></Field><Field label="Environment"><select value={form.environment} onChange={(event) => update("environment", event.target.value as Environment)} className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"><option value="development">Development</option><option value="staging">Staging</option><option value="production">Production</option></select></Field><Field label="Business owner"><Input value={form.businessOwner} onChange={(event) => update("businessOwner", event.target.value)} /></Field><Field label="Technical owner"><Input value={form.technicalOwner} onChange={(event) => update("technicalOwner", event.target.value)} /></Field><Field label="Primary contact email"><Input type="email" value={form.primaryContactEmail} onChange={(event) => update("primaryContactEmail", event.target.value)} placeholder="developer@example.in" /></Field><Field label="Secondary contact email"><Input type="email" value={form.secondaryContactEmail} onChange={(event) => update("secondaryContactEmail", event.target.value)} /></Field><Field label="Support contact"><Input value={form.supportContact} onChange={(event) => update("supportContact", event.target.value)} /></Field></div><Field label="Description"><textarea value={form.description} onChange={(event) => update("description", event.target.value)} rows={2} className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" /></Field><div className="grid gap-4 md:grid-cols-3"><Field label="Redirect URIs" hint="One exact URI per line"><textarea value={form.redirectUris} onChange={(event) => update("redirectUris", event.target.value)} rows={4} className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" placeholder={form.template === "native" ? "http://127.0.0.1:4000/callback" : "https://app.example.in/auth/callback"} /></Field><Field label="Post-logout redirect URIs" hint="One exact URI per line"><textarea value={form.postLogoutRedirectUris} onChange={(event) => update("postLogoutRedirectUris", event.target.value)} rows={4} className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" /></Field><Field label="Web origins" hint="One exact origin per line"><textarea value={form.webOrigins} onChange={(event) => update("webOrigins", event.target.value)} rows={4} className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" /></Field></div>{!editing && <Field label="Initial client administrator" hint="Optional; existing SSO user only"><div className="relative"><Input value={userQuery} onChange={(event) => onUserSearch(event.target.value)} placeholder="Search existing username, name or email" />{results.length > 0 && <div className="absolute z-10 mt-1 w-full rounded-lg border bg-background p-1 shadow-lg">{results.map((user) => <button key={user.id} type="button" onClick={() => onPick(user)} className="flex w-full justify-between rounded p-2 text-left text-sm hover:bg-muted"><span>{user.username}</span><span className="text-xs text-muted-foreground">{user.email}</span></button>)}</div>}</div></Field>}<div className="rounded-lg border bg-muted/20 p-4"><p className="mb-2 flex items-center gap-2 font-medium"><ShieldCheck className="h-4 w-4" /> Secure defaults to be applied</p><div className="grid gap-1 text-sm sm:grid-cols-2">{details.defaults.map((item) => <span key={item} className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-600" />{item}</span>)}</div><p className="mt-3 text-xs text-muted-foreground">{form.environment === "production" ? "Production clients require HTTPS and exact redirect/origin values; wildcards will be rejected." : "Authorization Services and external role API are not enabled by this phase-one workflow."}</p></div><DialogFooter><Button type="button" variant="outline" onClick={onCancel}>Cancel</Button><Button type="button" onClick={onSave} disabled={saving}>{saving && <Loader2 className="h-4 w-4 animate-spin" />}{editing ? "Save changes" : "Provision client"}</Button></DialogFooter></div>;
 }
+function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: ReactNode }) { return <div className="space-y-1.5"><Label>{label}{required && <span className="ml-1 text-destructive">*</span>}</Label>{hint && <p className="text-xs text-muted-foreground">{hint}</p>}{children}</div>; }
+function Summary({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border bg-muted/20 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 break-words text-sm font-medium">{value}</p></div>; }
+function FindingIcon({ level }: { level?: string }) { if (level === "pass") return <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />; if (level === "warning" || level === "warn") return <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />; if (level === "error" || level === "fail") return <X className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />; return <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />; }

@@ -43,6 +43,20 @@ export interface KcClient {
   enabled?: boolean;
   protocol?: string;
   publicClient?: boolean;
+  clientAuthenticatorType?: string;
+  standardFlowEnabled?: boolean;
+  implicitFlowEnabled?: boolean;
+  directAccessGrantsEnabled?: boolean;
+  serviceAccountsEnabled?: boolean;
+  authorizationServicesEnabled?: boolean;
+  redirectUris?: string[];
+  webOrigins?: string[];
+  postLogoutRedirectUris?: string[];
+  bearerOnly?: boolean;
+  frontchannelLogout?: boolean;
+  attributes?: Record<string, string>;
+  defaultClientScopes?: string[];
+  optionalClientScopes?: string[];
 }
 
 export interface KcRole {

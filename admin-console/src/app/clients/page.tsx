@@ -15,6 +15,7 @@ export default async function ClientsPage() {
     <ClientsDashboardClient
       username={session.user?.name ?? session.userId ?? "unknown"}
       canManageAdministrators={session.isRealmAdmin || isClientManager}
+      canManageClients={session.isRealmAdmin || isClientManager}
       isRealmAdmin={session.isRealmAdmin}
     />
   );

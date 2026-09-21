@@ -22,6 +22,13 @@
       "when": 1787920784319,
       "tag": "0002_empty_puff_adder",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787925000000,
+      "tag": "0003_client_management",
+      "breakpoints": true
     }
   ]
 }
