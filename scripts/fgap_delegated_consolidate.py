@@ -37,6 +37,8 @@ import requests
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
 
+from kc_auth import get_admin_token
+
 urllib3.disable_warnings(InsecureRequestWarning)
 
 DELEGATED_ROLES = ["user-manager", "client-manager", "group-manager-fgap", "delegated-client-admin-base"]
@@ -104,13 +106,8 @@ class Admin:
 
 
 def get_token(url, realm, user, password):
-    res = requests.post(
-        f"{url}/realms/{realm}/protocol/openid-connect/token",
-        data={"client_id": "admin-cli", "grant_type": "password", "username": user, "password": password},
-        verify=False, timeout=30,
-    )
-    res.raise_for_status()
-    return res.json()["access_token"]
+    # sso-automation service account first; user/password is the fallback.
+    return get_admin_token(url, realm, user, password)
 
 
 def ensure_shared_policy(admin):
@@ -190,8 +187,8 @@ def main():
     parser.add_argument("--password", default=os.getenv("KC_MASTER_ADMIN_PASSWORD"))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    if not args.user or not args.password:
-        sys.exit("admin credentials required (--user/--password or KC_MASTER_ADMIN_USER/PASSWORD)")
+    if not (args.user and args.password) and not os.getenv("KC_AUTOMATION_CLIENT_SECRET"):
+        sys.exit("admin credentials required (KC_AUTOMATION_CLIENT_SECRET, or --user/--password)")
 
     note(f"{'DRY RUN against' if args.dry_run else 'Applying to'} {args.url} realm={args.realm}")
     token = get_token(args.url, args.auth_realm, args.user, args.password)

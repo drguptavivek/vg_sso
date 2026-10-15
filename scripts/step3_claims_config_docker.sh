@@ -5,6 +5,7 @@ set -euo pipefail
 exec 1>/proc/1/fd/1 2>/proc/1/fd/2 2>/dev/null || true
 
 KCADM_BIN="${KCADM_BIN:-/opt/keycloak/bin/kcadm.sh}"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/kc_auth.sh"  # kc_admin_login: service account first
 KCADM_CONFIG="${KCADM_CONFIG:-/tmp/.kcadm_step3.config}"
 SERVER_URL="${KC_SERVER_URL:-http://keycloak:8080}"
 
@@ -38,12 +39,7 @@ fi
 deadline=$(( $(date +%s) + STEP3_WAIT_SECONDS ))
 echo "STEP3: waiting for Keycloak at ${SERVER_URL} ..."
 while true; do
-  if "$KCADM_BIN" config credentials \
-      --server "$SERVER_URL" \
-      --realm "$REALM_NAME" \
-      --user "$REALM_ADMIN_USER" \
-      --password "$REALM_ADMIN_PASSWORD" \
-      --config "$KCADM_CONFIG" >/dev/null 2>&1; then
+  if kc_admin_login "$SERVER_URL" "$KCADM_CONFIG" "$REALM_NAME" "$REALM_ADMIN_USER" "$REALM_ADMIN_PASSWORD" >/dev/null 2>&1; then
     break
   fi
   if (( $(date +%s) >= deadline )); then

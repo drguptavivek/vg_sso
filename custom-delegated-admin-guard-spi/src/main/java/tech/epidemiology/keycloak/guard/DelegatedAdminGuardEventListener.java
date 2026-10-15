@@ -65,7 +65,8 @@ public class DelegatedAdminGuardEventListener implements EventListenerProvider {
      */
     private static final Set<String> SYSTEM_CLIENT_IDS = Set.of(
             "admin-cli", "account", "account-console", "broker",
-            "realm-management", "security-admin-console", "admin-permissions", "sso-self-registration"
+            "realm-management", "security-admin-console", "admin-permissions", "sso-self-registration",
+            "sso-automation"
     );
 
     private final KeycloakSession session;

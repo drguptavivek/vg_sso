@@ -5,6 +5,7 @@ set -euo pipefail
 exec 1>/proc/1/fd/1 2>/proc/1/fd/2 2>/dev/null || true
 
 KCADM_BIN="${KCADM_BIN:-/opt/keycloak/bin/kcadm.sh}"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/kc_auth.sh"  # kc_admin_login: service account first
 KCADM_CONFIG="${KCADM_CONFIG:-/tmp/.kcadm_step2.config}"
 SERVER_URL="${KC_SERVER_URL:-http://keycloak:8080}"
 REALM_NAME="${KC_NEW_REALM_NAME:-}"
@@ -64,12 +65,7 @@ echo "STEP2: waiting for Keycloak at ${SERVER_URL} ..."
 last_auth_error=""
 while true; do
   auth_err="$(mktemp)"
-  if "$KCADM_BIN" config credentials \
-      --server "$SERVER_URL" \
-      --realm "$REALM_NAME" \
-      --user "$REALM_ADMIN_USER" \
-      --password "$REALM_ADMIN_PASSWORD" \
-      --config "$KCADM_CONFIG" >/dev/null 2>"$auth_err"; then
+  if kc_admin_login "$SERVER_URL" "$KCADM_CONFIG" "$REALM_NAME" "$REALM_ADMIN_USER" "$REALM_ADMIN_PASSWORD" >/dev/null 2>"$auth_err"; then
     rm -f "$auth_err"
     break
   fi
@@ -536,9 +532,13 @@ while IFS= read -r client_id; do
   if [[ -n "$admin_cli_id" && "$client_id" == "$admin_cli_id" ]]; then
     continue
   fi
-  kcadm update "clients/${client_id}" -r "${REALM_NAME}" \
-    -s directAccessGrantsEnabled=false \
-    -s implicitFlowEnabled=false >/dev/null
+  # Keycloak 26.7 forbids updating realm-management even for super-admins, and a
+  # client with invalid stored data rejects any update; warn instead of aborting.
+  if ! update_err="$(kcadm update "clients/${client_id}" -r "${REALM_NAME}" \
+      -s directAccessGrantsEnabled=false \
+      -s implicitFlowEnabled=false 2>&1 >/dev/null)"; then
+    echo "STEP2 WARN: could not harden client ${client_id_name:-$client_id}: ${update_err}"
+  fi
 done < <(kcadm get clients -r "${REALM_NAME}" --fields id --format csv --noquotes | cut -d',' -f1)
 
 mkdir -p "$(dirname "$STEP2_MARKER_FILE")"

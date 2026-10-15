@@ -48,7 +48,7 @@ export type UpdateClientInput = z.infer<typeof updateClientSchema>;
 export const RESERVED_CLIENTS = new Set([
   "account", "account-console", "admin-cli", "admin-permissions", "broker",
   "realm-management", "security-admin-console", "sso-self-registration",
-  "master-realm", "application-role-api",
+  "sso-automation", "master-realm", "application-role-api",
 ]);
 
 /**

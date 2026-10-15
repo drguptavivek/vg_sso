@@ -37,8 +37,12 @@ ADMIN_USER="${KEYCLOAK_ADMIN:-admin}"
 ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 SERVER_URL="http://keycloak:8080"
 
+KCADM_BIN="/opt/keycloak/bin/kcadm.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/kc_auth.sh"  # kc_admin_login: service account first
+
 echo "STEP5: Authenticating with kcadm..."
-/opt/keycloak/bin/kcadm.sh config credentials --server "$SERVER_URL" --realm master --user "$ADMIN_USER" --password "$ADMIN_PASSWORD"
+# Later kcadm calls use kcadm's default config file, so log in to that.
+kc_admin_login "$SERVER_URL" "$HOME/.keycloak/kcadm.config" master "$ADMIN_USER" "$ADMIN_PASSWORD"
 
 step5_state_is_applied() {
   local profile_json
@@ -125,12 +129,22 @@ echo "STEP5: Set default account expiry timezone to $DEFAULT_EXPIRY_TIMEZONE."
 # 4. Inject Date and Timezone properties into Declarative User Profile Schema (used by Admin UI Modal)
 echo "STEP5: Fetching timezone list from SPI..."
 
-# Get a fresh token for the curl call to the realm-level resource (from the target realm)
-TOKEN=$(curl -s -X POST "$SERVER_URL/realms/$REALM_NAME/protocol/openid-connect/token" \
-  -d "grant_type=password" \
-  -d "client_id=admin-cli" \
-  -d "username=$REALM_ADMIN_USER" \
-  -d "password=$REALM_ADMIN_PASSWORD" | jq -r '.access_token')
+# Get a fresh token for the curl call to the realm-level resource (from the target realm).
+# Prefer the sso-automation service account; the realm admin may have 2FA.
+TOKEN=""
+if [[ -n "${KC_AUTOMATION_CLIENT_SECRET:-}" ]]; then
+  TOKEN=$(curl -s -X POST "$SERVER_URL/realms/$REALM_NAME/protocol/openid-connect/token" \
+    -d "grant_type=client_credentials" \
+    --data-urlencode "client_id=${KC_AUTOMATION_CLIENT_ID:-sso-automation}" \
+    --data-urlencode "client_secret=${KC_AUTOMATION_CLIENT_SECRET}" | jq -r '.access_token')
+fi
+if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
+  TOKEN=$(curl -s -X POST "$SERVER_URL/realms/$REALM_NAME/protocol/openid-connect/token" \
+    -d "grant_type=password" \
+    -d "client_id=admin-cli" \
+    --data-urlencode "username=$REALM_ADMIN_USER" \
+    --data-urlencode "password=$REALM_ADMIN_PASSWORD" | jq -r '.access_token')
+fi
 
 if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
   echo "STEP5: Error - Could not obtain access token for SPI call."
@@ -206,6 +220,8 @@ echo "STEP5: Backfilling expiry attributes for existing users missing account_ex
 USERS_JSON="$(/opt/keycloak/bin/kcadm.sh get users -r "$REALM_NAME" --fields id,username,attributes)"
 echo "$USERS_JSON" | jq -cr '
   .[]
+  # Service accounts (e.g. sso-automation) are not people and must never expire.
+  | select((.username // "") | startswith("service-account-") | not)
   | select(((.attributes.account_expiry_date // []) | length) == 0)
   | {
       id,
@@ -230,9 +246,14 @@ echo "$USERS_JSON" | jq -cr '
   week_offset=$(( DEFAULT_EXPIRY_RANDOM_MIN_WEEKS + (checksum % week_span) ))
   expiry_date="$(date -u -d "+${DEFAULT_EXPIRY_BASE_YEARS} year +${week_offset} weeks" +%F)"
 
-  /opt/keycloak/bin/kcadm.sh update "users/$user_id" -r "$REALM_NAME" \
-    -s "attributes.account_expiry_date=[\"$expiry_date\"]" \
-    -s "attributes.account_expiry_timezone=[\"$target_tz\"]"
+  # A user whose stored profile fails current validation rejects any update;
+  # warn and continue rather than abort the whole step.
+  if ! /opt/keycloak/bin/kcadm.sh update "users/$user_id" -r "$REALM_NAME" \
+      -s "attributes.account_expiry_date=[\"$expiry_date\"]" \
+      -s "attributes.account_expiry_timezone=[\"$target_tz\"]"; then
+    echo "STEP5 WARN: could not backfill expiry for '$username' (profile validation?); fix the user in the admin console."
+    continue
+  fi
   echo "STEP5: Backfilled expiry for '$username' -> $expiry_date ($target_tz, +${week_offset}w)."
 done
 

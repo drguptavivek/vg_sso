@@ -22,6 +22,7 @@ import os
 import sys
 import argparse
 import requests
+from kc_auth import service_account_token
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
 
@@ -37,6 +38,7 @@ SYSTEM_CLIENT_IDS = [
     'security-admin-console',
     'admin-permissions',
     'sso-self-registration',
+    'sso-automation',  # realm-admin service account used by setup/maintenance
 ]
 
 def note(message):
@@ -46,6 +48,9 @@ def note(message):
 # ─────────────────────────────── UTILITIES ──────────────────────────────── #
 
 def get_admin_token(keycloak_url, realm, user, password):
+    token = service_account_token(keycloak_url)  # sso-automation service account first
+    if token:
+        return token
     url = f"{keycloak_url}/realms/{realm}/protocol/openid-connect/token"
     res = requests.post(url, data={
         'client_id': 'admin-cli',

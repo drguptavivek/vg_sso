@@ -5,6 +5,7 @@ set -euo pipefail
 exec 1>/proc/1/fd/1 2>/proc/1/fd/2 2>/dev/null || true
 
 KCADM_BIN="${KCADM_BIN:-/opt/keycloak/bin/kcadm.sh}"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/kc_auth.sh"  # kc_admin_login: service account first
 KCADM_CONFIG="${KCADM_CONFIG:-/tmp/.kcadm_step7.config}"
 SERVER_URL="${KC_SERVER_URL:-http://keycloak:8080}"
 REALM_NAME="${KC_NEW_REALM_NAME:-}"
@@ -46,12 +47,7 @@ echo "STEP7: waiting for Keycloak at ${SERVER_URL} ..."
 last_auth_error=""
 while true; do
   auth_err="$(mktemp)"
-  if "$KCADM_BIN" config credentials \
-      --server "$SERVER_URL" \
-      --realm "$REALM_NAME" \
-      --user "$REALM_ADMIN_USER" \
-      --password "$REALM_ADMIN_PASSWORD" \
-      --config "$KCADM_CONFIG" >/dev/null 2>"$auth_err"; then
+  if kc_admin_login "$SERVER_URL" "$KCADM_CONFIG" "$REALM_NAME" "$REALM_ADMIN_USER" "$REALM_ADMIN_PASSWORD" >/dev/null 2>"$auth_err"; then
     rm -f "$auth_err"
     break
   fi
@@ -98,8 +94,11 @@ fi
 echo "STEP7: Checking for '$PCA_BASE_ROLE_NAME' realm role..."
 if kcadm get "roles/$PCA_BASE_ROLE_NAME" -r "$REALM_NAME" >/dev/null 2>&1; then
   echo "STEP7: '$PCA_BASE_ROLE_NAME' role already exists, updating description..."
+  # delegated-admin-guard protects this role from admin REST changes (even for
+  # realm admins) once its SPI is active; the description is cosmetic.
   kcadm update "roles/$PCA_BASE_ROLE_NAME" -r "$REALM_NAME" \
-    -s "description=$PCA_BASE_ROLE_DESC"
+    -s "description=$PCA_BASE_ROLE_DESC" \
+    || echo "STEP7 WARN: role '$PCA_BASE_ROLE_NAME' is protected by delegated-admin-guard; description not updated."
 else
   echo "STEP7: Creating '$PCA_BASE_ROLE_NAME' realm role..."
   kcadm create roles -r "$REALM_NAME" \

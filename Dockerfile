@@ -37,6 +37,8 @@ COPY theme /opt/keycloak/themes
 COPY older_sso/groups_tree.json /opt/keycloak/import/groups_tree.json
 COPY older_sso/groups_expected.tsv /opt/keycloak/import/groups_expected.tsv
 COPY admin-console/src/config/designations.json /opt/keycloak/import/designations.json
+COPY scripts/kc_auth.sh /opt/keycloak/scripts/kc_auth.sh
+COPY scripts/ensure_automation_client.sh /opt/keycloak/scripts/ensure_automation_client.sh
 COPY scripts/step1_bootstrap_docker.sh /opt/keycloak/scripts/step1_bootstrap_docker.sh
 COPY scripts/step2_realm_config_docker.sh /opt/keycloak/scripts/step2_realm_config_docker.sh
 COPY scripts/step3_claims_config_docker.sh /opt/keycloak/scripts/step3_claims_config_docker.sh

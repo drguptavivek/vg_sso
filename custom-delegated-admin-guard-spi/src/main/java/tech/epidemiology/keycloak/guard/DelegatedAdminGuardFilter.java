@@ -166,7 +166,8 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
         "security-admin-console",
         "admin-cli",
         "admin-permissions",
-        "sso-self-registration"
+        "sso-self-registration",
+        "sso-automation"  // realm-admin service account used by setup/maintenance
     );
 
     // KeycloakSession is pushed into the JAX-RS @Context by Keycloak's own

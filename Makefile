@@ -12,7 +12,7 @@ UPGRADE_TEST_IMAGE ?= vg_sso-keycloak-upgrade-test:$(UPGRADE_TEST_VERSION)
 UPGRADE_TEST_KEYCLOAK_IMAGE ?= quay.io/keycloak/keycloak:$(UPGRADE_TEST_VERSION)
 SPI_MVN_ARGS ?=
 
-.PHONY: help self-registration-client-setup self-registration-client-secret-rotate apply-branding sync-designations build-spis dev-up dev-reload-spi up down reset ps logs kcadm-login \
+.PHONY: help self-registration-client-setup self-registration-client-secret-rotate apply-branding sync-designations build-spis dev-up dev-reload-spi up down reset ps logs kcadm-login automation-secret automation-client \
 	logs-all \
 	logs-runtime logs-init \
 	force-step1 force-step2 force-step3 force-step4 force-step5 force-step6 force-step7 force-step7-fgap force-step8 force-step9 force-step10 maintenance audit-export backup full-backup \
@@ -36,7 +36,9 @@ help:
 	@echo "  make logs-all         Tail last 200 lines for all containers"
 	@echo "  make logs-runtime     Tail last 200 lines for keycloak + postgres"
 	@echo "  make logs-init        Tail last 200 lines for step init containers"
-	@echo "  make kcadm-login      Login kcadm in vg-keycloak using KC_MASTER_ADMIN_USER from .env"
+	@echo "  make kcadm-login      Login kcadm in vg-keycloak (sso-automation service account, else KC_MASTER_ADMIN_USER)"
+	@echo "  make automation-secret Generate KC_AUTOMATION_CLIENT_SECRET in .env if missing"
+	@echo "  make automation-client Create/update the sso-automation service account (existing deployments)"
 	@echo "  make self-registration-client-setup Configure the restricted Keycloak registration service client"
 	@echo "  make self-registration-client-secret-rotate Explicitly rotate and save the registration client secret"
 	@echo "  make force-step1      Re-run step1-init"
@@ -94,6 +96,7 @@ dev-reload-spi:
 	./scripts/dev_hot_reload_spi.sh
 
 dev-up:
+	./scripts/ensure_automation_secret.sh
 	./scripts/apply_local_brand_assets.sh
 	./scripts/prepare_host_log_dir.sh
 	$(MAKE) build-spis
@@ -101,12 +104,14 @@ dev-up:
 	$(COMPOSE) up -d
 
 up:
+	./scripts/ensure_automation_secret.sh
 	./scripts/apply_local_brand_assets.sh
 	./scripts/prepare_host_log_dir.sh
 	$(MAKE) build-spis
 	$(COMPOSE) up -d --build
 
 prod-up:
+	./scripts/ensure_automation_secret.sh
 	./scripts/apply_local_brand_assets.sh
 	./scripts/prepare_host_log_dir.sh
 	$(MAKE) build-spis
@@ -136,8 +141,21 @@ logs-runtime:
 logs-init:
 	$(COMPOSE) logs --timestamps --tail=200 -f step1-init step2-init step2-fgap-init step3-init step4-init step5-init step6-init step6-fgap-init step7-init step7-fgap-init step8-init step9-init step10-init
 
+# Uses the sso-automation service account (realm-scoped) when
+# KC_AUTOMATION_CLIENT_SECRET is set and ADMIN_USER is not given; otherwise the
+# master admin from .env. ADMIN_USER=... ADMIN_PASSWORD=... forces a user login.
 kcadm-login:
-	@bash -lc 'set -euo pipefail; get_env() { grep -m1 "^$$1=" .env | cut -d= -f2-; }; server="$${KEYCLOAK_URL:-http://localhost:8080}"; realm="$${ADMIN_REALM:-master}"; user="$${ADMIN_USER:-$$(get_env KC_MASTER_ADMIN_USER)}"; password="$${ADMIN_PASSWORD:-$$(get_env KC_MASTER_ADMIN_PASSWORD)}"; config="$${KCADM_CONFIG:-/tmp/kcadm-master-admin.config}"; container="$${CONTAINER_NAME:-vg-keycloak}"; if [[ -z "$$user" || -z "$$password" ]]; then echo "ERROR: KC_MASTER_ADMIN_USER/KC_MASTER_ADMIN_PASSWORD missing in .env or ADMIN_USER/ADMIN_PASSWORD env" >&2; exit 1; fi; docker exec "$$container" /opt/keycloak/bin/kcadm.sh config credentials --server "$$server" --realm "$$realm" --user "$$user" --password "$$password" --config "$$config"; echo "kcadm config: $$config"'
+	@bash -lc 'set -euo pipefail; get_env() { grep -m1 "^$$1=" .env | cut -d= -f2- || true; }; server="$${KEYCLOAK_URL:-http://localhost:8080}"; config="$${KCADM_CONFIG:-/tmp/kcadm-master-admin.config}"; container="$${CONTAINER_NAME:-vg-keycloak}"; sa_secret="$$(get_env KC_AUTOMATION_CLIENT_SECRET)"; if [[ -z "$${ADMIN_USER:-}" && -n "$$sa_secret" ]]; then sa_client="$$(get_env KC_AUTOMATION_CLIENT_ID)"; sa_client="$${sa_client:-sso-automation}"; realm="$$(get_env KC_NEW_REALM_NAME)"; if docker exec "$$container" /opt/keycloak/bin/kcadm.sh config credentials --server "$$server" --realm "$$realm" --client "$$sa_client" --secret "$$sa_secret" --config "$$config" >/dev/null 2>&1; then echo "kcadm config: $$config (service account $$sa_client, realm $$realm)"; exit 0; fi; echo "WARN: service account $$sa_client login failed (run make automation-client); falling back to master admin" >&2; fi; realm="$${ADMIN_REALM:-master}"; user="$${ADMIN_USER:-$$(get_env KC_MASTER_ADMIN_USER)}"; password="$${ADMIN_PASSWORD:-$$(get_env KC_MASTER_ADMIN_PASSWORD)}"; if [[ -z "$$user" || -z "$$password" ]]; then echo "ERROR: KC_MASTER_ADMIN_USER/KC_MASTER_ADMIN_PASSWORD missing in .env or ADMIN_USER/ADMIN_PASSWORD env" >&2; exit 1; fi; docker exec "$$container" /opt/keycloak/bin/kcadm.sh config credentials --server "$$server" --realm "$$realm" --user "$$user" --password "$$password" --config "$$config"; echo "kcadm config: $$config"'
+
+automation-secret:
+	./scripts/ensure_automation_secret.sh
+
+# Create/update the sso-automation client for an EXISTING deployment (fresh
+# installs get it from step 1). Logs in to master as the bootstrap or master
+# admin from .env. Safe to re-run; re-running after changing the secret in .env
+# rotates it.
+automation-client: automation-secret
+	$(COMPOSE) run --rm --no-deps --entrypoint /bin/bash -v "$(CURDIR)/scripts:/opt/keycloak/scripts:ro" step1-init /opt/keycloak/scripts/ensure_automation_client.sh
 
 self-registration-client-setup: kcadm-login
 	./scripts/setup_self_registration_client.sh

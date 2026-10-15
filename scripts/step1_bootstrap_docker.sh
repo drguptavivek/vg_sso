@@ -24,6 +24,11 @@ NEW_REALM_ADMIN_FIRST_NAME="${KC_NEW_REALM_ADMIN_FIRST_NAME:-Realm}"
 NEW_REALM_ADMIN_FIRST_NAME="${KC_NEW_REALM_ADMIN_FIRST_NAME:-Realm}"
 NEW_REALM_ADMIN_LAST_NAME="${KC_NEW_REALM_ADMIN_LAST_NAME:-Admin}"
 
+AUTOMATION_CLIENT_ID="${KC_AUTOMATION_CLIENT_ID:-sso-automation}"
+AUTOMATION_CLIENT_SECRET="${KC_AUTOMATION_CLIENT_SECRET:-}"
+# shellcheck source=ensure_automation_client.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ensure_automation_client.sh"
+
 KEYCLOAK_ENV="${KEYCLOAK_ENV:-production}"
 if [[ "$KEYCLOAK_ENV" == "development" ]]; then
   SSL_REQUIRED="NONE"
@@ -179,7 +184,11 @@ if [[ -z "$realm_user_id" ]]; then
   echo "STEP1: realm admin user created."
 else
   echo "STEP1: realm admin user already exists."
-  if can_authenticate "$NEW_REALM_NAME" "$NEW_REALM_ADMIN_USER" "$NEW_REALM_ADMIN_PASSWORD"; then
+  if [[ -n "$AUTOMATION_CLIENT_SECRET" ]]; then
+    # Automation uses the service account; the realm admin is a human account
+    # (may have 2FA and a password changed in the UI). Leave its credentials alone.
+    echo "STEP1: automation service account configured; not touching realm admin credentials."
+  elif can_authenticate "$NEW_REALM_NAME" "$NEW_REALM_ADMIN_USER" "$NEW_REALM_ADMIN_PASSWORD"; then
     echo "STEP1: realm admin password already valid; skipping reset."
   else
     kcadm set-password -r "$NEW_REALM_NAME" --username "$NEW_REALM_ADMIN_USER" --new-password "$NEW_REALM_ADMIN_PASSWORD" >/dev/null || true
@@ -203,9 +212,15 @@ if [[ -n "$NEW_REALM_ADMIN_EMAIL" && -n "$realm_user_id" ]]; then
   kcadm update "users/${realm_user_id}" -r "$NEW_REALM_NAME" "${cmd_args[@]}" >/dev/null
 fi
 
-# Ensure the automation realm-admin account can use direct grant (kcadm) without
-# being blocked by pending required actions.
-if [[ -n "$realm_user_id" ]]; then
+if [[ -n "$AUTOMATION_CLIENT_SECRET" ]]; then
+  echo "STEP1: ensuring automation service account '${AUTOMATION_CLIENT_ID}' ..."
+  ensure_automation_client "$NEW_REALM_NAME" "$AUTOMATION_CLIENT_ID" "$AUTOMATION_CLIENT_SECRET"
+fi
+
+# Legacy mode (no automation secret): keep the realm-admin account usable for
+# direct-grant kcadm automation by clearing required actions. With the service
+# account configured, the realm admin is a human account and keeps its 2FA.
+if [[ -n "$realm_user_id" && -z "$AUTOMATION_CLIENT_SECRET" ]]; then
   kcadm update "users/${realm_user_id}" -r "$NEW_REALM_NAME" \
     -s 'requiredActions=[]' \
     -s emailVerified=true >/dev/null || true

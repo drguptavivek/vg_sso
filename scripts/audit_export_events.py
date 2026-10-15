@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import requests
+from kc_auth import service_account_token
 
 
 def iso_day(value: str) -> dt.date:
@@ -38,6 +39,11 @@ class KeycloakAdminClient:
         self._token = None
 
     def authenticate(self) -> None:
+        token = service_account_token(self.base_url)  # sso-automation service account first
+        if token:
+            self._token = token
+            self.session.headers.update({"Authorization": f"Bearer {self._token}"})
+            return
         url = f"{self.base_url}/realms/{self.realm}/protocol/openid-connect/token"
         data = {
             "grant_type": "password",

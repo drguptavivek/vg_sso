@@ -4,6 +4,7 @@ import json
 import time
 import argparse
 import requests
+from kc_auth import service_account_token
 from urllib3.exceptions import InsecureRequestWarning
 import warnings
 
@@ -14,6 +15,9 @@ def note(message):
     print(f"STEP2-FGAP: {message}", flush=True)
 
 def get_admin_token(keycloak_url, login_realm, admin_user, admin_password, max_retries=10, retry_delay=3):
+    token = service_account_token(keycloak_url)  # sso-automation service account first
+    if token:
+        return token
     url = f"{keycloak_url}/realms/{login_realm}/protocol/openid-connect/token"
     payload = {
         'client_id': 'admin-cli',

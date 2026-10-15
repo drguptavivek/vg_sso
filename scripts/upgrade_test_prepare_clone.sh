@@ -69,6 +69,11 @@ for id in $config_ids; do
   echo "Neutralized SMS gateway in clone authenticator config ${id}"
 done
 
+if [[ "${PREPARE_RESET_REALM_ADMIN:-true}" != "true" ]]; then
+  echo "Skipping realm admin reset (PREPARE_RESET_REALM_ADMIN=false)"
+  exit 0
+fi
+
 user_id="$(kcadm get users -r "$REALM" -q exact=true -q "username=${REALM_ADMIN_USER}" --fields id |
   python3 -c 'import json,sys; u=json.load(sys.stdin); print(u[0]["id"] if u else "")')"
 if [[ -z "$user_id" ]]; then

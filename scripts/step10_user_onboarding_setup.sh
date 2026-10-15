@@ -4,6 +4,7 @@ set -euo pipefail
 exec 1>/proc/1/fd/1 2>/proc/1/fd/2 2>/dev/null || true
 
 KCADM_BIN="${KCADM_BIN:-/opt/keycloak/bin/kcadm.sh}"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/kc_auth.sh"  # kc_admin_login: service account first
 KCADM_CONFIG="${KCADM_CONFIG:-/tmp/.kcadm_step10.config}"
 SERVER_URL="${KC_SERVER_URL:-http://keycloak:8080}"
 REALM_NAME="${KC_NEW_REALM_NAME:-}"
@@ -40,12 +41,7 @@ echo "STEP10: waiting for Keycloak at ${SERVER_URL} ..."
 last_auth_error=""
 while true; do
   auth_err="$(mktemp)"
-  if "$KCADM_BIN" config credentials \
-      --server "$SERVER_URL" \
-      --realm "$ADMIN_REALM" \
-      --user "$ADMIN_USER" \
-      --password "$ADMIN_PASSWORD" \
-      --config "$KCADM_CONFIG" >/dev/null 2>"$auth_err"; then
+  if kc_admin_login "$SERVER_URL" "$KCADM_CONFIG" "$ADMIN_REALM" "$ADMIN_USER" "$ADMIN_PASSWORD" >/dev/null 2>"$auth_err"; then
     rm -f "$auth_err"
     break
   fi

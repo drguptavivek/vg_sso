@@ -50,7 +50,8 @@ Update at least these values in `.env`:
 Notes:
 
 - `step1-init` fails fast if `KC_MASTER_ADMIN_USER`, `KC_NEW_REALM_ADMIN_USER`, or their passwords still use placeholder values like `change_*`.
-- `step2-init` and `step3-init` authenticate with `KC_NEW_REALM_ADMIN_USER` in `KC_NEW_REALM_NAME`.
+- Steps 2-10, the FGAP scripts, the maintenance runner, and `make kcadm-login` authenticate as the `sso-automation` service account (client credentials, realm-admin in `KC_NEW_REALM_NAME`). Its secret `KC_AUTOMATION_CLIENT_SECRET` is generated into `.env` by `make up`/`prod-up`/`dev-up` (`scripts/ensure_automation_secret.sh`), and step 1 creates the client. Human admin passwords are only a fallback, so human admins (realm admin, master admin) can have 2FA. With the service account configured, step 1 no longer resets the realm admin's password or removes its OTP.
+- Existing deployments (step 1 already done): run `make automation-client` once to create the client. Re-run it after changing the secret in `.env` to rotate it.
 - Keep `.env` and `.kcadm.config` local; they contain secrets/tokens.
 
 ## Local CLI Shortcuts
@@ -235,6 +236,8 @@ docker compose -f docker-compose.yml -f docker-compose.override.yml run --rm -e 
 docker compose -f docker-compose.yml -f docker-compose.override.yml run --rm -e STEP10_FORCE=true step10-init
 ```
 
+**Do not force init steps on production.** Forced steps re-apply the repo baseline and overwrite manual production changes. For example, step 4 resets the browser flow to `browser-PhoneOTP`, step 2 resets the brute-force limit, and step 5 backfills expiry dates. Use targeted scripts through the maintenance runner instead (e.g. `make maintenance MAINT_CMD='python3 /workspace/scripts/fgap_delegated_consolidate.py --dry-run'`).
+
 Useful when iterating:
 
 - use `STEP1_FORCE=true` after changing realm bootstrap assumptions
@@ -271,7 +274,7 @@ docker compose -f docker-compose.yml -f docker-compose.override.yml down -v
 
 ## kcadm Login From Host
 
-Use `make kcadm-login` to create a host-side `kcadm` token cache using
+Use `make kcadm-login` to create a host-side `kcadm` token cache. It logs in as the `sso-automation` service account (realm-scoped: use `-r <realm>`) when `KC_AUTOMATION_CLIENT_SECRET` is set, and otherwise uses
 `KC_MASTER_ADMIN_USER` and `KC_MASTER_ADMIN_PASSWORD` from `.env`.
 The target parses `.env` with `grep`/`cut`; do not source `.env` because some
 values may not be shell-safe.
