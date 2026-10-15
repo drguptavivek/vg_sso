@@ -164,6 +164,12 @@ def ensure_scope_permission(keycloak_url, token, realm, mgmt_client_id,
     return res.json()['id']
 
 
+def consolidate_users_permissions(keycloak_url, token, realm):
+    """Shared delegated Users permission; removes conflicting per-role ones."""
+    from fgap_users_consolidate import Admin, consolidate
+    consolidate(Admin(keycloak_url, realm, token, dry_run=False))
+
+
 # ─────────────────────────────── MAIN ───────────────────────────────────── #
 
 def main():
@@ -239,15 +245,10 @@ def main():
     # ── Step 5: Users permission for delegated-client-admin-base ──
     #    view:                  browse the user directory (needed to find users to add)
     #    manage-group-membership: add/remove users from groups via Users API
-    ensure_scope_permission(
-        KC_URL, token, REALM, mgmt_id,
-        perm_name='perm-users-delegated-client-admin-base',
-        resource_type='Users',
-        scope_names=['view', 'manage-group-membership'],
-        policy_ids=[policy_allow_id],
-        resource_ids=None
-    )
-    note("✅ Users view+manage-group-membership permission set for delegated-client-admin-base")
+    #    Both come from the shared delegated permission: per-role realm-wide Users
+    #    permissions cancel each other out under FGAP v2's UNANIMOUS strategy.
+    consolidate_users_permissions(KC_URL, token, REALM)
+    note("✅ Users view+manage-group-membership via shared delegated permission")
 
     note("")
     note("═══════════════════════════════════════════════════")

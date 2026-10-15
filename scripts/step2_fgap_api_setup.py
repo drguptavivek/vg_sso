@@ -206,6 +206,11 @@ def create_scope_permission(keycloak_url, token, target_realm, mgmt_client_id, p
     response.raise_for_status()
     return response.json()["id"]
 
+def consolidate_users_permissions(keycloak_url, token, realm):
+    """Shared delegated Users permission; removes conflicting per-role ones."""
+    from fgap_users_consolidate import Admin, consolidate
+    consolidate(Admin(keycloak_url, realm, token, dry_run=False))
+
 def main():
     parser = argparse.ArgumentParser(description="Configure FGAPv2 for Keycloak 26 via Authz API")
     parser.add_argument('--url',         default='http://localhost:8080', help='Keycloak Base URL')
@@ -247,12 +252,13 @@ def main():
             target_realm=args.realm,
             mgmt_client_id=mgmt_client_id,
             perm_name="perm-users-user-manager",
-            description="Allow user-manager to create/edit users, reset credentials, send execute-actions email, and assign group membership",
+            description="Allow user-manager to create/edit/disable users and reset credentials",
             resource_type="Users",
-            scope_names=["view", "manage", "manage-group-membership"],
+            scope_names=["manage", "reset-password"],
             policy_ids=[policy_id]
         )
         note(f"Users permission ID: {permission_id}")
+        consolidate_users_permissions(args.url, token, args.realm)
         return
 
     if args.only_user_manager_client_audit:
@@ -334,9 +340,9 @@ def main():
         target_realm=args.realm,
         mgmt_client_id=mgmt_client_id,
         perm_name="perm-users-user-manager",
-        description="Allow user-manager to create/edit users and assign group membership",
+        description="Allow user-manager to create/edit/disable users and reset credentials",
         resource_type="Users",
-        scope_names=["view", "manage", "manage-group-membership"],
+        scope_names=["manage", "reset-password"],
         policy_ids=[policy_id]
     )
     note(f"Users permission ID: {perm_users_id}")
@@ -384,19 +390,10 @@ def main():
     )
     note(f"Group manager Groups permission ID: {group_manager_groups_perm_id}")
 
-    note("Ensuring Users scope permission for group-manager-fgap")
-    group_manager_users_perm_id = create_scope_permission(
-        keycloak_url=args.url,
-        token=token,
-        target_realm=args.realm,
-        mgmt_client_id=mgmt_client_id,
-        perm_name="perm-users-group-manager-fgap",
-        description="Allow group-manager-fgap to search users and manage their group membership",
-        resource_type="Users",
-        scope_names=["view", "manage-group-membership"],
-        policy_ids=[group_manager_policy_id]
-    )
-    note(f"Group manager Users permission ID: {group_manager_users_perm_id}")
+    # Users view + group membership for all delegated roles live in ONE shared
+    # permission: FGAP v2 is UNANIMOUS, so per-role realm-wide Users
+    # permissions cancel each other out (see fgap_users_consolidate.py).
+    consolidate_users_permissions(args.url, token, args.realm)
 
     note("Success: FGAPv2 configured.")
 

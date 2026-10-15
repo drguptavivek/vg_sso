@@ -201,10 +201,10 @@ admin-console-log-archive:
 	./scripts/archive_admin_console_logs.sh
 
 maintenance:
-	$(COMPOSE) run --rm --no-build keycloak-maintenance /bin/bash -lc "$${MAINT_CMD:?Set MAINT_CMD='...'}"
+	$(COMPOSE) run --rm keycloak-maintenance /bin/bash -lc "$${MAINT_CMD:?Set MAINT_CMD='...'}"
 
 audit-export:
-	$(COMPOSE) run --rm --no-build keycloak-maintenance python3 /workspace/scripts/audit_export_events.py
+	$(COMPOSE) run --rm keycloak-maintenance python3 /workspace/scripts/audit_export_events.py
 
 backup:
 	./scripts/full_backup.sh

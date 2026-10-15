@@ -233,6 +233,12 @@ def ensure_scope_permission(keycloak_url, token, realm, mgmt_client_id,
     return res.json()['id']
 
 
+def consolidate_users_permissions(keycloak_url, token, realm):
+    """Shared delegated Users permission; removes conflicting per-role ones."""
+    from fgap_users_consolidate import Admin, consolidate
+    consolidate(Admin(keycloak_url, realm, token, dry_run=False))
+
+
 # ──────────────────────── TESTING CLIENT SETUP ──────────────────────────── #
 
 def ensure_testing_client(keycloak_url, token, realm):
@@ -393,15 +399,10 @@ def main():
 
     # The Users-side scope is required by PUT/DELETE
     # /users/{userId}/groups/{groupId}. It does not grant profile edits.
-    ensure_scope_permission(
-        KC_URL, token, REALM, mgmt_id,
-        perm_name='perm-users-client-manager-view',
-        resource_type='Users',
-        scope_names=['view', 'manage-group-membership'],
-        policy_ids=[policy_allow_id],
-        resource_ids=None
-    )
-    note("✅ Users view+manage-group-membership permission set for client-manager")
+    # It comes from the shared delegated permission: per-role realm-wide Users
+    # permissions cancel each other out under FGAP v2's UNANIMOUS strategy.
+    consolidate_users_permissions(KC_URL, token, REALM)
+    note("✅ Users view+manage-group-membership via shared delegated permission")
 
     # ── Step 9: Register the delegated-admin-guard event listener ──
     #    The delegated-admin-guard SPI enforces rules that FGAP v2 scopes cannot:
