@@ -43,9 +43,21 @@ for _ in {1..60}; do
   sleep 2
 done
 
-docker exec -e KCADM_PASSWORD="$ADMIN_PASSWORD" "$CLONE_CONTAINER" bash -c \
-  '/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master \
-     --user "$0" --password "$KCADM_PASSWORD" --config "$1" >/dev/null' "$ADMIN_USER" "$KCADM_CONFIG"
+# The clone is a copy of production, so it has the sso-automation service
+# account (and human admins with 2FA). Prefer the service account; fall back to
+# the master admin password for clones taken before the service account existed.
+SA_CLIENT="$(get_env_value KC_AUTOMATION_CLIENT_ID)"
+SA_SECRET="$(get_env_value KC_AUTOMATION_CLIENT_SECRET)"
+if [[ -n "$SA_SECRET" ]] && docker exec -e KCADM_SECRET="$SA_SECRET" "$CLONE_CONTAINER" bash -c \
+    '/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm "$0" \
+       --client "$1" --secret "$KCADM_SECRET" --config "$2" >/dev/null 2>&1' \
+    "$REALM" "${SA_CLIENT:-sso-automation}" "$KCADM_CONFIG"; then
+  echo "Logged into clone as service account ${SA_CLIENT:-sso-automation}"
+else
+  docker exec -e KCADM_PASSWORD="$ADMIN_PASSWORD" "$CLONE_CONTAINER" bash -c \
+    '/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master \
+       --user "$0" --password "$KCADM_PASSWORD" --config "$1" >/dev/null' "$ADMIN_USER" "$KCADM_CONFIG"
+fi
 
 flows_json="$(kcadm get authentication/flows -r "$REALM")"
 config_ids="$(
