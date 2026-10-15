@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { signOut } from "next-auth/react";
 import { toast } from "sonner";
 import {
@@ -9,6 +9,13 @@ import {
 } from "lucide-react";
 import type { KcGroup, KcUser, KcUserSession } from "@/types/keycloak";
 import type { HrmsEmployeeRecord, HrmsLookupResult } from "@/types/hrms";
+import {
+  accountExpiryStatus,
+  EXPIRY_WARNING_DAYS,
+  shiftIsoDate,
+  todayIsoDate,
+  type AccountExpiryStatus,
+} from "@/lib/accountExpiry";
 import {
   USER_PROFILE_FIELDS,
   supportedTimezones,
@@ -114,6 +121,56 @@ function MfaCredentialIndicator({ user }: { user: KcUser }) {
       <ShieldX className="h-3.5 w-3.5" aria-label="No saved MFA credential" />
     </span>
   );
+}
+
+function AccountExpiryBadge({ status }: { status: AccountExpiryStatus }) {
+  if (status.state === "active") return null;
+  return (
+    <Badge
+      variant={status.state === "expired" ? "destructive" : "outline"}
+      title={`Account expiry ${status.date} (${status.timeZone})`}
+      className={
+        "h-5 shrink-0 px-1.5 text-[10px] " +
+        (status.state === "expired"
+          ? ""
+          : "border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-400")
+      }
+    >
+      {status.state === "expired" ? "Expired" : status.label}
+    </Badge>
+  );
+}
+
+/** One click sets the whole filter set, so a chip is active only when nothing else is filtered. */
+interface FilterPreset {
+  expiryFrom: string;
+  expiryTo: string;
+  phoneVerified: string;
+  enabled: string;
+  adminAccess: string;
+}
+
+const EMPTY_PRESET: FilterPreset = {
+  expiryFrom: "",
+  expiryTo: "",
+  phoneVerified: "",
+  enabled: "",
+  adminAccess: "",
+};
+
+function quickFilterPresets(today: string): { key: string; label: string; preset: FilterPreset }[] {
+  return [
+    { key: "all", label: "All", preset: EMPTY_PRESET },
+    { key: "expired", label: "Expired", preset: { ...EMPTY_PRESET, expiryTo: shiftIsoDate(today, -1) } },
+    {
+      key: "near-expiry",
+      label: `Expiring \u2264${EXPIRY_WARNING_DAYS}d`,
+      preset: { ...EMPTY_PRESET, expiryFrom: today, expiryTo: shiftIsoDate(today, EXPIRY_WARNING_DAYS) },
+    },
+    { key: "admins", label: "Admins", preset: { ...EMPTY_PRESET, adminAccess: "any" } },
+    { key: "disabled", label: "Disabled", preset: { ...EMPTY_PRESET, enabled: "false" } },
+    { key: "phone-unverified", label: "Phone unverified", preset: { ...EMPTY_PRESET, phoneVerified: "false" } },
+  ];
 }
 
 interface BrowserSecurityStatus {
@@ -237,6 +294,37 @@ export default function HrDashboardClient({
     adminAccessFilter,
     filterGroup?.id,
   ].filter(Boolean).length;
+
+  const quickFilters = useMemo(() => {
+    const today = todayIsoDate();
+    const current: FilterPreset = {
+      expiryFrom,
+      expiryTo,
+      phoneVerified: phoneVerifiedFilter,
+      enabled: enabledFilter,
+      adminAccess: adminAccessFilter,
+    };
+    const narrowedElsewhere = Boolean(employeeId.trim() || userTypeGroupId || filterGroup);
+    return quickFilterPresets(today).map((chip) => ({
+      ...chip,
+      active: !narrowedElsewhere && (Object.keys(chip.preset) as (keyof FilterPreset)[])
+        .every((key) => chip.preset[key] === current[key]),
+    }));
+  }, [adminAccessFilter, employeeId, enabledFilter, expiryFrom, expiryTo, filterGroup, phoneVerifiedFilter, userTypeGroupId]);
+
+  function applyQuickFilter(preset: FilterPreset) {
+    setExpiryFrom(preset.expiryFrom);
+    setExpiryTo(preset.expiryTo);
+    setPhoneVerifiedFilter(preset.phoneVerified);
+    setEnabledFilter(preset.enabled);
+    setAdminAccessFilter(preset.adminAccess);
+    setEmployeeId("");
+    setUserTypeGroupId("");
+    setFilterGroup(null);
+    setFilterGroupQuery("");
+    setFilterGroupResults([]);
+    setPage(1);
+  }
 
   const cannotDisable = useCallback((user: KcUser) => (
     user.id === currentUserId || (!isRealmAdmin && user.adminAccess?.includes("realm-admin") === true)
@@ -393,6 +481,24 @@ export default function HrDashboardClient({
                 className="h-9 pl-9"
               />
             </div>
+            <div className="flex flex-wrap gap-1.5">
+              {quickFilters.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  aria-pressed={chip.active}
+                  onClick={() => applyQuickFilter(chip.preset)}
+                  className={
+                    "rounded-full border px-2.5 py-1 text-xs transition-colors " +
+                    (chip.active
+                      ? "border-primary bg-primary/10 font-medium text-primary"
+                      : "text-muted-foreground hover:bg-accent")
+                  }
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
             {showFilters && (
             <div className="grid gap-2 rounded-lg border bg-muted/20 p-2 sm:grid-cols-2">
               <div className="space-y-1 sm:col-span-2">
@@ -424,6 +530,7 @@ export default function HrDashboardClient({
                   onChange={(event) => { setAdminAccessFilter(event.target.value); setPage(1); }}
                   className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs">
                   <option value="">Any access</option>
+                  <option value="any">Has any admin access</option>
                   <option value="realm-admin">Realm Admin</option>
                   <option value="client-manager">Client Manager</option>
                   <option value="user-manager">User Manager</option>
@@ -544,20 +651,35 @@ export default function HrDashboardClient({
                 Resend onboarding
               </Button>
             </div>
+            <div className="flex flex-wrap items-center gap-3 px-1 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-sm border border-destructive/60 bg-destructive/20" /> Expired
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-sm border border-amber-500/60 bg-amber-500/20" />
+                Expires within {EXPIRY_WARNING_DAYS} days
+              </span>
+            </div>
             <div className="max-h-[65vh] space-y-1 overflow-y-auto pr-1">
               {loading && (
                 <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading users...
                 </div>
               )}
-              {!loading && users.map((listedUser) => (
+              {!loading && users.map((listedUser) => {
+                const expiry = accountExpiryStatus(listedUser);
+                return (
                 <div
                   key={listedUser.id}
                   className={
                     "flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors " +
                     (!showCreate && selectedUser?.id === listedUser.id
                       ? "border-primary bg-primary/10"
-                      : "hover:bg-accent")
+                      : expiry?.state === "expired"
+                        ? "border-destructive/60 bg-destructive/5 hover:bg-destructive/10"
+                        : expiry?.state === "expiring"
+                          ? "border-amber-500/60 bg-amber-500/5 hover:bg-amber-500/10"
+                          : "hover:bg-accent")
                   }
                 >
                   <Checkbox
@@ -589,6 +711,7 @@ export default function HrDashboardClient({
                           <span className="text-muted-foreground"> · {listedUser.username}</span>
                         </p>
                         <div className="flex shrink-0 items-center gap-2">
+                          {expiry && <AccountExpiryBadge status={expiry} />}
                           <AdminAccessDots values={listedUser.adminAccess ?? []} />
                           <PhoneVerificationIndicator user={listedUser} />
                           <MfaCredentialIndicator user={listedUser} />
@@ -608,7 +731,8 @@ export default function HrDashboardClient({
                     </div>
                   </button>
                 </div>
-              ))}
+                );
+              })}
               {!loading && users.length === 0 && (
                 <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
                   <UserRound className="h-8 w-8 opacity-50" /> No users found.

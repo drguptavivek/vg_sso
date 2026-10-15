@@ -29,7 +29,7 @@ export const USER_PROFILE_FIELDS: readonly UserProfileField[] = [
     source: "attribute",
     control: "text",
     maxLength: 12,
-    pattern: "^[6-9][0-9]{4} [0-9]{5}$",
+    pattern: "^[6-9][0-9]{4} ?[0-9]{5}$",
     placeholder: "98765 43210",
     helpText: "Indian mobile numbers only. Enter 10 digits without +91 or a leading 0; legacy prefixes are removed automatically.",
   },

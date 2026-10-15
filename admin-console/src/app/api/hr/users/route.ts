@@ -171,7 +171,9 @@ export async function GET(req: NextRequest) {
       matches = await enrichUsersWithAdminAccess(auth.ctx.accessToken, matches);
       matches = matches.filter((user) => adminAccessFilter === "app-admin"
         ? user.adminAccess?.some((access) => access.startsWith("app-admin:"))
-        : user.adminAccess?.includes(adminAccessFilter));
+        : adminAccessFilter === "any"
+          ? (user.adminAccess?.length ?? 0) > 0
+          : user.adminAccess?.includes(adminAccessFilter));
     }
     const pageUsers = await enrichUsersWithAdminAccess(
       auth.ctx.accessToken,
