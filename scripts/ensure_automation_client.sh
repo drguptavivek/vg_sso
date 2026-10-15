@@ -56,7 +56,17 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   kcadm() { "$KCADM_BIN" "$@" --config "$KCADM_CONFIG"; }
 
   logged_in=false
+  # Re-runs: the service account (realm-admin) can maintain its own client, so
+  # this keeps working after the human master admin gets 2FA. To rotate the
+  # secret then, regenerate it in the admin console (Clients > sso-automation >
+  # Credentials) and put the new value in .env.
+  if "$KCADM_BIN" config credentials --server "$SERVER_URL" --realm "$REALM" \
+      --client "$CLIENT_ID" --secret "$SECRET" --config "$KCADM_CONFIG" >/dev/null 2>&1; then
+    echo "AUTOMATION: logged in as service account '${CLIENT_ID}'."
+    logged_in=true
+  fi
   for pair in "${KC_BOOTSTRAP_ADMIN_USERNAME:-}:BOOT" "${KC_MASTER_ADMIN_USER:-}:MASTER"; do
+    [[ "$logged_in" == true ]] && break
     user="${pair%:*}"; kind="${pair##*:}"
     [[ -n "$user" ]] || continue
     if [[ "$kind" == BOOT ]]; then pass="${KC_BOOTSTRAP_ADMIN_PASSWORD:-}"; else pass="${KC_MASTER_ADMIN_PASSWORD:-}"; fi
