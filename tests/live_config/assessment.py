@@ -231,6 +231,20 @@ def _summarize_claims(payload: dict, preferred_keys: list[str]) -> dict:
     return summary
 
 
+def make_test_email(local_part: str) -> str:
+    """Email for a throwaway test user.
+
+    With LIVE_TEST_EMAIL=name@domain, every test user gets a unique plus-tagged
+    address (name+local_part@domain) so any mail the realm sends - onboarding,
+    expiry reminders - lands in one mailbox we own instead of a third party.
+    """
+    base = os.environ.get("LIVE_TEST_EMAIL", "").strip()
+    if "@" not in base:
+        return f"{local_part}@example.org"
+    name, domain = base.split("@", 1)
+    return f"{name}+{local_part}@{domain}"
+
+
 def _create_direct_grant_client(
     realm_client: KeycloakAdminClient,
     realm: str,
@@ -277,7 +291,7 @@ def _create_report_user(
         json_body={
             "username": username,
             "enabled": True,
-            "email": f"{username}@example.org",
+            "email": make_test_email(username),
             "firstName": first_name,
             "lastName": last_name,
             "emailVerified": True,
@@ -298,7 +312,7 @@ def _create_report_user(
             "id": user_id,
             "username": username,
             "enabled": True,
-            "email": f"{username}@example.org",
+            "email": make_test_email(username),
             "firstName": first_name,
             "lastName": last_name,
             "emailVerified": True,
@@ -1075,7 +1089,7 @@ def collect_claim_reports(context: dict) -> tuple[list[ClaimShapeReport], list[G
         last_name: str,
     ) -> GroupClaimScenarioReport | None:
         scenario_username = f"report-groups-{scenario_name}-{suffix}"
-        scenario_password = f"Groups@{suffix}123!"
+        scenario_password = f"Groups@{suffix}789!"  # avoids forbiddenTerms (e.g. "123")
         scenario_user_id = _create_report_user(
             realm_client,
             realm,
@@ -1130,7 +1144,7 @@ def collect_claim_reports(context: dict) -> tuple[list[ClaimShapeReport], list[G
             return [], []
 
         username = f"report-claims-{suffix}"
-        password = f"Report@{suffix}123!"
+        password = f"Report@{suffix}789!"  # avoids forbiddenTerms (e.g. "123")
         created_user_id = _create_report_user(
             realm_client,
             realm,

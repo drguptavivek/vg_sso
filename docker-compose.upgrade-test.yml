@@ -45,14 +45,75 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-ChangeMe123!}
       KC_FAILURE_LOG_FILE: ${KC_FAILURE_LOG_FILE:-/var/log/keycloak/failure-auth.log}
       KC_LOG: console
+      # Onboarding links must point at the clone, never at production.
+      KC_SPI_EVENTS_LISTENER_USER_ONBOARDING_EMAIL_PUBLIC_BASE_URL: http://localhost:18080
     command: [ "start", "--optimized", "--hostname-strict=false", "--health-enabled=true" ]
     ports:
       - "18080:8080"
       - "19000:9000"
+    networks:
+      default:
+        # Same hostname as production so nginx test confs and live config
+        # tests work unchanged against the clone.
+        aliases: [ keycloak, vg-keycloak ]
     volumes:
       - keycloak_upgrade_test_data:/opt/keycloak/data
       - ./logs/keycloak-upgrade-test:/var/log/keycloak
 
+  # Live config tests against the clone (make upgrade-test-config). The clone
+  # is disposable, so tests that rewrite 2FA config are allowed here only.
+  upgrade-nginx-proxy:
+    build:
+      context: .
+      dockerfile: tests/nginx/Dockerfile
+    container_name: vg-nginx-proxy-upgrade-test
+    restart: "no"
+    profiles: [ "test" ]
+    depends_on:
+      upgrade-keycloak:
+        condition: service_started
+    networks:
+      default:
+        aliases: [ nginx-proxy ]
+    volumes:
+      - ./nginx-confs/docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx-confs/docker/00-global-http.conf:/etc/nginx/conf.d/00-global-http.conf:ro
+      - ./nginx-confs/docker/sso1-master.conf:/etc/nginx/conf.d/sso1-master.conf:ro
+      - ./nginx-confs/docker/sso2-org-new-delhi.conf:/etc/nginx/conf.d/sso2-org-new-delhi.conf:ro
+
+  upgrade-config-tests:
+    build:
+      context: .
+      dockerfile: tests/live_config/Dockerfile
+    container_name: vg-config-tests-upgrade-test
+    restart: "no"
+    profiles: [ "test" ]
+    depends_on:
+      upgrade-nginx-proxy:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      KC_SERVER_URL: http://keycloak:8080
+      KC_PROXY_HTTP_URL: http://nginx-proxy
+      KC_PROXY_HTTPS_URL: https://nginx-proxy
+      KC_PROXY_MASTER_HOST: sso1.local.test
+      KC_PROXY_REALM_HOST: sso2.local.test
+      KC_PROXY_ADMIN_ALLOWED_IP: 192.168.1.34
+      KC_PROXY_ADMIN_DENIED_IP: 192.168.1.99
+      LIVE_TEST_ALLOW_AUTH_MUTATION: "true"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - .:/workspace:ro
+      - ./tmp:/workspace/tmp
+      - ./tests/results/upgrade-test:/workspace/tests/results
+      - config_tests_upgrade_venv:/opt/venv
+      - config_tests_upgrade_uv_cache:/root/.cache/uv
+    working_dir: /workspace
+    command: [ "/bin/sh", "-lc", "echo 'CONFIG-TESTS: starting pytest run (upgrade-test clone)' && status=0 && uv run --project /tmp/live-config pytest -o cache_dir=/tmp/pytest-cache /workspace/tests/live_config -v || status=$$? && echo \"CONFIG-TESTS: pytest finished with status $$status\" && uv run --project /tmp/live-config python /workspace/tests/live_config/generate_report.py --markdown-out /workspace/tests/results/live-config-report.md --json-out /workspace/tests/results/live-config-report.json && exit $$status" ]
+
 volumes:
   postgres_upgrade_test_data:
   keycloak_upgrade_test_data:
+  config_tests_upgrade_venv:
+  config_tests_upgrade_uv_cache:

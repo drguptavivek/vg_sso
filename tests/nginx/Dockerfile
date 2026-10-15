@@ -1,6 +1,5 @@
-FROM nginx:1.27-alpine
-
-RUN apk add --no-cache openssl
+# Debian variant ships openssl, so no package-mirror access is needed at build time.
+FROM nginx:1.27
 
 RUN mkdir -p /etc/nginx/certs \
  && openssl req -x509 -nodes -newkey rsa:2048 -days 365 \

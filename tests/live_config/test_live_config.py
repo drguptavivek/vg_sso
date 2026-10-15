@@ -1,4 +1,5 @@
 import json
+import os
 import time
 import uuid
 import unittest
@@ -7,10 +8,16 @@ from pathlib import Path
 
 import yaml
 
-from assessment import GROUPS_EXPECTED, build_context, decode_jwt_payload
+from assessment import GROUPS_EXPECTED, build_context, decode_jwt_payload, make_test_email
 
 
 REPO_ROOT = Path("/workspace")
+
+# Tests that rewrite login/2FA configuration (e.g. repointing the realm's
+# phone-OTP SMS gateway to a mock) must never touch production by accident.
+# Opt in only against a disposable clone: LIVE_TEST_ALLOW_AUTH_MUTATION=true.
+ALLOW_AUTH_MUTATION = os.environ.get("LIVE_TEST_ALLOW_AUTH_MUTATION", "").lower() == "true"
+AUTH_MUTATION_SKIP_REASON = "rewrites live 2FA config; set LIVE_TEST_ALLOW_AUTH_MUTATION=true on a disposable clone"
 
 
 class LiveConfigValidationTests(unittest.TestCase):
@@ -65,7 +72,7 @@ class LiveConfigValidationTests(unittest.TestCase):
             json_body={
                 "username": username,
                 "enabled": True,
-                "email": f"{username}@example.org",
+                "email": make_test_email(username),
                 "firstName": first_name,
                 "lastName": last_name,
                 "emailVerified": True,
@@ -87,7 +94,7 @@ class LiveConfigValidationTests(unittest.TestCase):
                 "id": user_id,
                 "username": username,
                 "enabled": True,
-                "email": f"{username}@example.org",
+                "email": make_test_email(username),
                 "firstName": first_name,
                 "lastName": last_name,
                 "emailVerified": True,
@@ -250,7 +257,7 @@ class LiveConfigValidationTests(unittest.TestCase):
                 json_body={
                     "username": username,
                     "enabled": True,
-                    "email": f"{username}@example.org",
+                    "email": make_test_email(username),
                     "firstName": "Onboard",
                     "lastName": "User",
                     "emailVerified": False,
@@ -415,7 +422,7 @@ class LiveConfigValidationTests(unittest.TestCase):
         client = self.client
         suffix = uuid.uuid4().hex[:8]
         username = f"claims-user-{suffix}"
-        password = f"Claims@{suffix}123!"
+        password = f"Claims@{suffix}789!"  # avoids forbiddenTerms (e.g. "123")
         minimal_client_id = f"claims-minimal-{suffix}"
         detail_client_id = f"claims-detail-{suffix}"
         created_client_ids = []
@@ -433,7 +440,7 @@ class LiveConfigValidationTests(unittest.TestCase):
                 json_body={
                     "username": username,
                     "enabled": True,
-                    "email": f"{username}@example.org",
+                    "email": make_test_email(username),
                     "firstName": "Claims",
                     "lastName": "User",
                     "emailVerified": True,
@@ -461,7 +468,7 @@ class LiveConfigValidationTests(unittest.TestCase):
                     "id": created_user_id,
                     "username": username,
                     "enabled": True,
-                    "email": f"{username}@example.org",
+                    "email": make_test_email(username),
                     "firstName": "Claims",
                     "lastName": "User",
                     "emailVerified": True,
@@ -542,7 +549,7 @@ class LiveConfigValidationTests(unittest.TestCase):
             self.assertEqual(detail_claims["posts"], ["Cardiology"])
             self.assertEqual(detail_claims["given_name"], "Claims")
             self.assertEqual(detail_claims["family_name"], "User")
-            self.assertEqual(detail_claims["email"], f"{username}@example.org")
+            self.assertEqual(detail_claims["email"], make_test_email(username))
             self.assertNotIn("remarks", detail_claims)
         finally:
             cleanup()
@@ -645,7 +652,7 @@ class LiveConfigValidationTests(unittest.TestCase):
             for scenario in scenarios:
                 with self.subTest(scenario=scenario["name"]):
                     username = f"group-user-{scenario['name']}-{suffix}"
-                    password = f"Group@{suffix}123!"
+                    password = f"Group@{suffix}789!"  # avoids forbiddenTerms (e.g. "123")
                     user_id = self._create_user_with_password(
                         username,
                         password,
@@ -739,7 +746,7 @@ class LiveConfigValidationTests(unittest.TestCase):
                 {
                     "username": f"invalid-phone-{uuid.uuid4().hex[:8]}",
                     "enabled": True,
-                    "email": f"invalid-phone-{uuid.uuid4().hex[:8]}@example.org",
+                    "email": make_test_email(f"invalid-phone-{uuid.uuid4().hex[:8]}"),
                     "firstName": "Invalid",
                     "lastName": "Phone",
                     "emailVerified": True,
@@ -754,7 +761,7 @@ class LiveConfigValidationTests(unittest.TestCase):
                 {
                     "username": f"invalid-employee-{uuid.uuid4().hex[:8]}",
                     "enabled": True,
-                    "email": f"invalid-employee-{uuid.uuid4().hex[:8]}@example.org",
+                    "email": make_test_email(f"invalid-employee-{uuid.uuid4().hex[:8]}"),
                     "firstName": "Invalid",
                     "lastName": "Employee",
                     "emailVerified": True,
@@ -769,7 +776,7 @@ class LiveConfigValidationTests(unittest.TestCase):
                 {
                     "username": f"invalid-post-{uuid.uuid4().hex[:8]}",
                     "enabled": True,
-                    "email": f"invalid-post-{uuid.uuid4().hex[:8]}@example.org",
+                    "email": make_test_email(f"invalid-post-{uuid.uuid4().hex[:8]}"),
                     "firstName": "Invalid",
                     "lastName": "Post",
                     "emailVerified": True,
@@ -784,7 +791,7 @@ class LiveConfigValidationTests(unittest.TestCase):
                 {
                     "username": f"invalid-remarks-{uuid.uuid4().hex[:8]}",
                     "enabled": True,
-                    "email": f"invalid-remarks-{uuid.uuid4().hex[:8]}@example.org",
+                    "email": make_test_email(f"invalid-remarks-{uuid.uuid4().hex[:8]}"),
                     "firstName": "Invalid",
                     "lastName": "Remarks",
                     "emailVerified": True,
@@ -829,7 +836,7 @@ class LiveConfigValidationTests(unittest.TestCase):
 
         suffix = uuid.uuid4().hex[:8]
         username = f"rate-user-{suffix}"
-        password = f"Rate@{suffix}123!"
+        password = f"Rate@{suffix}789!"  # avoids forbiddenTerms (e.g. "123")
         client_id = f"rate-client-{suffix}"
         created_client_id = None
         created_user_id = None
@@ -846,7 +853,7 @@ class LiveConfigValidationTests(unittest.TestCase):
                 json_body={
                     "username": username,
                     "enabled": True,
-                    "email": f"{username}@example.org",
+                    "email": make_test_email(username),
                     "firstName": "Rate",
                     "lastName": "Limit",
                     "emailVerified": True,
@@ -869,7 +876,7 @@ class LiveConfigValidationTests(unittest.TestCase):
                     "id": created_user_id,
                     "username": username,
                     "enabled": True,
-                    "email": f"{username}@example.org",
+                    "email": make_test_email(username),
                     "firstName": "Rate",
                     "lastName": "Limit",
                     "emailVerified": True,
@@ -1088,7 +1095,7 @@ class LiveConfigValidationTests(unittest.TestCase):
 
             def create_user(role_name=None):
                 u_name = f"user-{role_name or 'std'}-{suffix}"
-                pw = f"Temp@{suffix}123!"
+                pw = f"Temp@{suffix}789!"  # avoids forbiddenTerms (e.g. "123")
                 u_id = self._create_user_with_password(u_name, pw, "Test", "User", {})
                 created_user_ids.append(u_id)
                 if role_name:
@@ -1253,6 +1260,7 @@ class LiveConfigValidationTests(unittest.TestCase):
                 except Exception:
                     pass
 
+    @unittest.skipUnless(ALLOW_AUTH_MUTATION, AUTH_MUTATION_SKIP_REASON)
     def test_step4_end_to_end_login_otp_enforcement(self) -> None:
         import uuid
         import requests
@@ -1270,7 +1278,7 @@ class LiveConfigValidationTests(unittest.TestCase):
         
         suffix = uuid.uuid4().hex[:8]
         u_name = f"e2e-user-{suffix}"
-        pw = f"Temp@{suffix}123!"
+        pw = f"Temp@{suffix}789!"  # avoids forbiddenTerms (e.g. "123")
         
         # Start a server for mock SMS
         import http.server
@@ -1673,7 +1681,7 @@ class LiveConfigValidationTests(unittest.TestCase):
 
             def create_user(role_name=None):
                 u_name = f"fgap-{role_name or 'std'}-{suffix}"
-                pw = f"Fgap@{suffix}123!"
+                pw = f"Fgap@{suffix}789!"  # avoids forbiddenTerms (e.g. "123")
                 u_id = self._create_user_with_password(u_name, pw, "FGAP", "Test", {"phone_verified": ["true"]})
                 created_user_ids.append(u_id)
                 if role_name:
@@ -1731,7 +1739,7 @@ class LiveConfigValidationTests(unittest.TestCase):
 
             # Test 3: Modify a user attributes (e.g. standard_user)
             def test_modify_user():
-                status, _, body = self.client.raw_request("PUT", f"/admin/realms/{self.realm}/users/{st_id}", json_body={"firstName": "Modified", "email": f"mod-{suffix}@example.org"})
+                status, _, body = self.client.raw_request("PUT", f"/admin/realms/{self.realm}/users/{st_id}", json_body={"firstName": "Modified", "email": make_test_email(f"mod-{suffix}")})
                 return status
             self.assertEqual(run_as(st_token, test_modify_user), 403)
             self.assertEqual(run_as(um_token, test_modify_user), 204)
@@ -1786,9 +1794,9 @@ class LiveConfigValidationTests(unittest.TestCase):
         # 3. Test Authentication behavior
         suffix = uuid.uuid4().hex[:8]
         u_name = f"expiry-tester-{suffix}"
-        pw = f"Expiry@{suffix}123!"
+        pw = f"Expiry@{suffix}789!"  # avoids forbiddenTerms (e.g. "123")
         reminder_user_name = f"expiry-um-{suffix}"
-        reminder_user_pw = f"ExpiryUm@{suffix}123!"
+        reminder_user_pw = f"ExpiryUm@{suffix}789!"  # avoids forbiddenTerms (e.g. "123")
         dg_client_id = f"expiry-claim-{suffix}"
 
         # Create a test user with a phone number and verified status so they bypass OTP 
@@ -2063,7 +2071,7 @@ class LiveConfigValidationTests(unittest.TestCase):
         try:
             # Create a client-manager user
             cm_user = f"client-mgr-{suffix}"
-            cm_pw = f"ClientMgr@{suffix}123!"
+            cm_pw = f"ClientMgr@{suffix}789!"  # avoids forbiddenTerms (e.g. "123")
             cm_id = self._create_user_with_password(cm_user, cm_pw, "Client", "Manager", {})
             created_user_ids.append(cm_id)
 

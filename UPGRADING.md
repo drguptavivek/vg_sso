@@ -92,6 +92,16 @@ Remove test containers and test volumes:
 make upgrade-test-reset
 ```
 
+## Live Config Tests On The Clone
+
+Run the live config suite against the clone, never against production:
+
+```bash
+make upgrade-test-config
+```
+
+`scripts/upgrade_test_prepare_clone.sh` runs first, inside the clone container only. It points every phone-OTP SMS gateway at a dead address, and resets the clone's `.env` realm admin (password, lockout, OTP) so the test client can log in. The clone runner sets `LIVE_TEST_ALLOW_AUTH_MUTATION=true`, which enables the test that rewrites the SMS gateway config. Plain `make test-config` skips that test, so production 2FA is never modified. Test users get `LIVE_TEST_EMAIL` plus-tagged addresses (`noreply-sso1+<tag>@aiims.edu.in`). Reports go to the gitignored `tests/results/upgrade-test/`.
+
 ## What To Verify
 
 During the first `make upgrade-test-up`, check logs for:

@@ -19,7 +19,7 @@ SPI_MVN_ARGS ?=
 	admin-console-build admin-console-db-provision admin-console-db-migrate \
 	admin-console-up admin-console-stop admin-console-logs admin-console-log-archive \
 	test-config test-step6 test-step7 \
-	upgrade-test-build upgrade-test-db-copy upgrade-test-up upgrade-test-logs upgrade-test-version upgrade-test-down upgrade-test-reset
+	upgrade-test-build upgrade-test-db-copy upgrade-test-up upgrade-test-logs upgrade-test-version upgrade-test-config upgrade-test-down upgrade-test-reset
 
 help:
 	@echo "Targets:"
@@ -70,6 +70,7 @@ help:
 	@echo "  make upgrade-test-up      Start 26.7.5 rehearsal Keycloak on 18080/19000"
 	@echo "  make upgrade-test-logs    Tail upgrade-test Keycloak logs"
 	@echo "  make upgrade-test-version Print test Keycloak version"
+	@echo "  make upgrade-test-config  Run live config tests against the clone (incl. 2FA-mutating tests)"
 	@echo "  make upgrade-test-down    Stop upgrade-test containers"
 	@echo "  make upgrade-test-reset   Stop upgrade-test containers and remove test volumes"
 
@@ -242,8 +243,15 @@ upgrade-test-logs:
 upgrade-test-version:
 	docker exec vg-keycloak-upgrade-test /opt/keycloak/bin/kc.sh --version
 
+upgrade-test-config:
+	mkdir -p tests/results/upgrade-test
+	./scripts/upgrade_test_prepare_clone.sh
+	$(COMPOSE_UPGRADE_TEST) --profile test up -d --build upgrade-nginx-proxy
+	$(COMPOSE_UPGRADE_TEST) --profile test run --rm --build upgrade-config-tests; status=$$?; \
+	$(COMPOSE_UPGRADE_TEST) --profile test rm -fsv upgrade-nginx-proxy; exit $$status
+
 upgrade-test-down:
-	$(COMPOSE_UPGRADE_TEST) down
+	$(COMPOSE_UPGRADE_TEST) --profile test down
 
 upgrade-test-reset:
-	$(COMPOSE_UPGRADE_TEST) down -v
+	$(COMPOSE_UPGRADE_TEST) --profile test down -v
