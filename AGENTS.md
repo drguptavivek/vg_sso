@@ -187,7 +187,9 @@ Each mandatory step writes a marker file into the shared Keycloak data volume an
 - `/hr` for `user-manager` holders: create/search users, enable/disable, reset credentials, resend onboarding email, assign/remove existing group membership.
 - `/groups` for delegated admins and realm admins: separate realm-wide groups from one-card-per-application role trees, manage direct membership, and audit a user.s realm/application memberships.
 
-It authenticates via a manually configured confidential OIDC client and then calls Keycloak's own Admin REST API with the signed-in user's access token - it introduces no new authorization surface, only a curated UI over the FGAP v2 + `custom-delegated-admin-guard-spi` model documented in [`docs/user-manager-policy.md`](docs/user-manager-policy.md), [`docs/delegated-client-admin-policy.md`](docs/delegated-client-admin-policy.md), and [`docs/AdminConsole.md`](docs/AdminConsole.md). See [`admin-console/README.md`](admin-console/README.md) for configuration and local development.
+It authenticates via a manually configured confidential OIDC client and then calls Keycloak's own Admin REST API with the signed-in user's access token - it introduces no new authorization surface, only a curated UI over the FGAP v2 + `custom-delegated-admin-guard-spi` model documented in [`docs/user-manager-policy.md`](docs/user-manager-policy.md), [`docs/delegated-client-admin-policy.md`](docs/delegated-client-admin-policy.md), and [`docs/AdminConsole.md`](docs/AdminConsole.md).
+
+Before changing any FGAP permission, policy, or delegated role, read [`docs/fgap-gotchas.md`](docs/fgap-gotchas.md). FGAP v2 is UNANIMOUS, so per-role realm-wide permissions cancel each other out. See [`admin-console/README.md`](admin-console/README.md) for configuration and local development.
 
 Copy `.env.admin-console.template` to `.env.admin-console` and set real `ADMIN_CONSOLE_CLIENT_SECRET` and `ADMIN_CONSOLE_NEXTAUTH_SECRET` values before enabling the optional profile. Normal stack startup does not require them.
 

@@ -64,7 +64,7 @@ FGAP v2 evaluates all realm-wide permissions on a resource UNANIMOUSLY. Separate
 - Only `user-manager` may create, edit, disable, or reset credentials for users. Other delegated roles may only change group membership.
 - A `user-manager` without another delegated role may assign and remove membership in existing groups but cannot create, rename, move, or delete groups. AppRoles roots stay protected.
 
-`manage-members` (edit every user inside a group) is deliberately not granted to any delegated role.
+`manage-members` (edit every user inside a group) is deliberately not granted to any delegated role. See [`fgap-gotchas.md`](fgap-gotchas.md).
 
 ### 3.3 What is NOT granted
 
