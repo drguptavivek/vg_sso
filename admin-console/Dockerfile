@@ -1,21 +1,22 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# pnpm version comes from package.json "packageManager".
+RUN corepack enable && corepack prepare --activate
+RUN pnpm install --frozen-lockfile
 
 FROM deps AS migration
 COPY . .
 ENV NODE_ENV=production
-CMD ["npm", "run", "db:migrate"]
+CMD ["pnpm", "run", "db:migrate"]
 
-FROM node:22-alpine AS build
-WORKDIR /app
+FROM deps AS build
 ENV NEXT_TELEMETRY_DISABLED=1
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Build-time env is not required: this app reads Keycloak/NextAuth config at
 # request time (server components / route handlers), not at build time.
-RUN npm run build
+RUN pnpm run build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app

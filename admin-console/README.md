@@ -63,7 +63,7 @@ make admin-console-db-provision
 make admin-console-db-migrate
 ```
 
-Set `ADMIN_CONSOLE_DB_NAME`, `ADMIN_CONSOLE_DB_USER`, `ADMIN_CONSOLE_DB_PASSWORD`, and `ADMIN_CONSOLE_DATABASE_URL` in the gitignored `.env.admin-console`. Use `npm run db:generate` after intentional schema changes and commit the TypeScript schema and generated SQL.
+Set `ADMIN_CONSOLE_DB_NAME`, `ADMIN_CONSOLE_DB_USER`, `ADMIN_CONSOLE_DB_PASSWORD`, and `ADMIN_CONSOLE_DATABASE_URL` in the gitignored `.env.admin-console`. Use `pnpm run db:generate` after intentional schema changes and commit the TypeScript schema and generated SQL.
 
 The database is not a Keycloak profile copy. It stores only app-owned extension data, additional contact identifiers, and the mutation audit log. The Keycloak user UUID remains the authoritative identity key.
 
@@ -71,12 +71,20 @@ The database is not a Keycloak profile copy. It stores only app-owned extension 
 
 ```bash
 cd admin-console
-npm install
+pnpm install
 cp .env.local.example .env.local   # then edit as needed
-npm run dev
+pnpm run dev
 ```
 
 The app listens on `http://localhost:3100` by default.
+
+### Dependency policy
+
+The package manager is pnpm, pinned through `packageManager` in `package.json` (`corepack enable` picks it up). `pnpm-workspace.yaml` enforces:
+
+- `minimumReleaseAge`: new package versions must be at least 7 days old before they can be resolved.
+- `minimumReleaseAgeExclude`: exceptions are allowed only for patches that fix a critical vulnerability. Pin the exact version(s), cite the advisory, and delete the entry once the version is older than 7 days.
+- `allowBuilds`: dependency install scripts are blocked unless explicitly listed.
 
 ## Docker compose
 
@@ -155,6 +163,6 @@ Verify it actually took effect from a host that is *not* the LAN nginx box - a c
 ## Type-checking / build
 
 ```bash
-npm run typecheck
-npm run build
+pnpm run typecheck
+pnpm run build
 ```

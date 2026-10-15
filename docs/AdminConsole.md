@@ -152,4 +152,4 @@ NextAuth performs browser authorization against the public Keycloak issuer. Logo
 4. Confirm user audit handles multiple/no matches, Clear, delegated-admin detection, and role lists.
 5. Confirm cards show direct-member counts and open the correct member list.
 6. Confirm logout ends both application and Keycloak sessions.
-7. Run `npm run typecheck` and `npm run build` in `admin-console/`.
+7. Run `pnpm run typecheck` and `pnpm run build` in `admin-console/`.

@@ -1,0 +1,28 @@
+# Supply-chain policy: only resolve package versions published at least
+# 7 days ago (value in minutes).
+minimumReleaseAge: 10080
+
+# Exceptions are allowed ONLY for patches that fix a critical vulnerability.
+# Pin the exact version, cite the advisory, and remove the entry once the
+# version is older than 7 days.
+minimumReleaseAgeExclude:
+  # Critical Next.js advisory fixed in 16.4.1 (published 2026-10-14).
+  # Its @next/* companion packages ship in the same release.
+  - next@16.4.1
+  - '@next/env@16.4.1'
+  - '@next/swc-darwin-arm64@16.4.1'
+  - '@next/swc-darwin-x64@16.4.1'
+  - '@next/swc-linux-arm64-gnu@16.4.1'
+  - '@next/swc-linux-arm64-musl@16.4.1'
+  - '@next/swc-linux-x64-gnu@16.4.1'
+  - '@next/swc-linux-x64-musl@16.4.1'
+  - '@next/swc-win32-arm64-msvc@16.4.1'
+  - '@next/swc-win32-x64-msvc@16.4.1'
+
+# Security patch for a transitive dependency (tailwindcss -> postcss).
+overrides:
+  source-map-js: ^1.2.2
+
+# Dependency install scripts are blocked unless listed here.
+allowBuilds:
+  esbuild: true
