@@ -1,4 +1,4 @@
-ARG KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:26.7.2
+ARG KEYCLOAK_IMAGE=quay.io/keycloak/keycloak:26.7.5
 
 FROM fedora:35 AS build-tools
 RUN dnf install -y jq curl findutils \

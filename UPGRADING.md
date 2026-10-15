@@ -2,7 +2,7 @@
 
 This repo uses a Docker-based Keycloak runtime. Test Keycloak upgrades against a cloned database before changing production.
 
-Target under rehearsal: Keycloak `26.7.2`.
+Target under rehearsal: Keycloak `26.7.5`.
 
 ## Principles
 
@@ -163,6 +163,20 @@ Review these upstream changes during the isolated rehearsal:
 - Re-run all SPI compilation and live configuration tests because Keycloak 26.7 upgrades internal server APIs and Quarkus.
 
 Official guide: https://www.keycloak.org/docs/latest/upgrading/index.html
+
+## 26.7.5 Rehearsal Result (2026-10-15)
+
+Target moved from 26.7.2 to the 26.7.5 patch release (published 2026-09-30, outside the 7-day minimum release age). 26.8.x was not considered: it is a minor release still inside the 7-day window. Production was still running 26.6.3, so this rehearsal covers the 26.6.3 -> 26.7.5 path.
+
+- All eight SPI modules compiled with `-Dkeycloak.version=26.7.5`; 85 Maven tests passed (the delegated-admin guard has no tests).
+- Image `vg_sso-keycloak-upgrade-test:26.7.5` built and reports Keycloak 26.7.5 at runtime.
+- The live DB was dumped (`backups/upgrade-test/keycloak-20261015_110543.dump`) and restored into `vg-postgres-upgrade-test`.
+- Model migrated to 26.7.0; `master` and `aiims-new-delhi` realm migrations logged; `Bootstrap completed in 6.1s`; readiness `UP`.
+- No ERROR lines or exceptions. Only warnings: deprecated default features (`identity-brokering-api:v1`, `twitter-broker:v1`) and WebAuthn `requireResidentKey` deprecation.
+- Master/realm admin consoles, account console, and OIDC discovery returned 200; async-email, account-expiry, and phone-OTP admin endpoints returned 401 (providers loaded).
+- `keycloak_sources/` is still pinned to the `26.7.2` tag.
+
+Still open before production promotion: the authenticated role checks listed under the 26.7.2 result.
 
 ## 26.7.2 Rehearsal Result (2026-08-28)
 
