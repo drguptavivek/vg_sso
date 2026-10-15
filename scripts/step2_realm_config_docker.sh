@@ -363,6 +363,10 @@ cat >"$profile_payload" <<'JSON'
           "options": ["Permanent", "Contract", "Research", "Student", "Deputed", "Outsourced", "Vendor"]
         }
       },
+      "annotations": {
+        "inputType": "select",
+        "inputOptionsFromValidation": "options"
+      },
       "multivalued": false
     },
     {
@@ -422,6 +426,10 @@ cat >"$profile_payload" <<'JSON'
         "options": {
           "options": []
         }
+      },
+      "annotations": {
+        "inputType": "select",
+        "inputOptionsFromValidation": "options"
       },
       "multivalued": false
     },
