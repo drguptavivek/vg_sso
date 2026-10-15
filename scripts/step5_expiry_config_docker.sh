@@ -217,7 +217,19 @@ fi
 # 5. Backfill existing accounts that do not already have an explicit expiry date.
 #    Rule: current date + 1 year + pseudo-random 2-8 weeks, stable per user.
 echo "STEP5: Backfilling expiry attributes for existing users missing account_expiry_date ..."
-USERS_JSON="$(/opt/keycloak/bin/kcadm.sh get users -r "$REALM_NAME" --fields id,username,attributes)"
+# No --fields: kcadm's field filter returns attributes as {}, which made every
+# user look like it had no expiry and overwrote real dates on each run.
+# Page through all users (the API returns at most `max` per call).
+USERS_JSON="[]"
+first=0
+page_size=200
+while :; do
+  page="$(/opt/keycloak/bin/kcadm.sh get users -r "$REALM_NAME" -q briefRepresentation=false \
+    -q first="$first" -q max="$page_size" | jq -c 'map({id, username, attributes})')"
+  USERS_JSON="$(jq -c --argjson p "$page" '. + $p' <<<"$USERS_JSON")"
+  [[ "$(jq 'length' <<<"$page")" -lt "$page_size" ]] && break
+  first=$((first + page_size))
+done
 echo "$USERS_JSON" | jq -cr '
   .[]
   # Service accounts (e.g. sso-automation) are not people and must never expire.

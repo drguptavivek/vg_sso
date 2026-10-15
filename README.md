@@ -284,6 +284,7 @@ Primary entrypoints:
 - `make test-config`
 - `make test-step6`
 - `make test-step7`
+- `make fresh-install-test`: isolated fresh install (step 1 to step 10 on an empty database), then marker and forced re-run idempotency checks; never touches production
 
 Test artifacts are written under [`tests/results/`](tests/results/).
 

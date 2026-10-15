@@ -475,8 +475,29 @@ jq --slurpfile designations "$STEP2_DESIGNATIONS_FILE" '(.attributes[] | select(
   "$profile_payload" >"$designation_profile_payload"
 mv "$designation_profile_payload" "$profile_payload"
 
-kcadm update "users/profile" -r "${REALM_NAME}" -f "$profile_payload" >/dev/null
-rm -f "$profile_payload"
+# Merge into the live profile instead of replacing it: later steps (e.g.
+# step 5's account_expiry_* attributes) and manual changes add attributes that
+# a full replace would drop. A dropped attribute hides every user's value, and
+# step 5's backfill then overwrites real expiry dates on a forced re-run.
+current_profile="$(mktemp)"
+merged_profile="$(mktemp)"
+kcadm get "users/profile" -r "${REALM_NAME}" >"$current_profile"
+jq -s '
+  def upsert($cur; $new):
+    ($new | map({key: .name, value: .}) | from_entries) as $byname
+    | ($cur | map(.name)) as $curnames
+    | ($cur | map(if $byname[.name] then $byname[.name] else . end))
+      + ($new | map(select(.name as $n | $curnames | index($n) | not)));
+  .[0] as $cur | .[1] as $new
+  | $new
+  | .attributes = upsert($cur.attributes // []; $new.attributes // [])
+  | .groups = upsert($cur.groups // []; $new.groups // [])
+  | if ($new | has("unmanagedAttributePolicy")) then . else
+      (if ($cur.unmanagedAttributePolicy) then .unmanagedAttributePolicy = $cur.unmanagedAttributePolicy else . end)
+    end
+' "$current_profile" "$profile_payload" >"$merged_profile"
+kcadm update "users/profile" -r "${REALM_NAME}" -f "$merged_profile" >/dev/null
+rm -f "$profile_payload" "$current_profile" "$merged_profile"
 
 echo "STEP2: applying phone attributes to realm admin user (if configured) ..."
 if [[ -n "$REALM_ADMIN_PHONE" || -n "$REALM_ADMIN_PHONE_VERIFIED" ]]; then
@@ -518,15 +539,53 @@ kcadm add-roles -r "${REALM_NAME}" --rname group-manager-fgap --cclientid realm-
 
 
 if [[ -f "$STEP2_GROUPS_TREE_FILE" ]]; then
-  echo "STEP2: importing groups from ${STEP2_GROUPS_TREE_FILE} ..."
-  groups_payload="$(mktemp)"
-  {
-    printf '{\n  "ifResourceExists": "OVERWRITE",\n  "groups": '
-    cat "$STEP2_GROUPS_TREE_FILE"
-    printf '\n}\n'
-  } >"$groups_payload"
-  kcadm create partialImport -r "${REALM_NAME}" -f "$groups_payload" >/dev/null
-  rm -f "$groups_payload"
+  # Idempotent, non-destructive sync. Never use partialImport with
+  # ifResourceExists=OVERWRITE here: it deletes and recreates existing groups,
+  # dropping every membership and group role mapping on a forced re-run.
+  # Missing groups are created (parents first). The tree's attributes are
+  # merged into existing groups; other attributes, members, and roles stay.
+  echo "STEP2: syncing groups from ${STEP2_GROUPS_TREE_FILE} (create missing, merge attributes) ..."
+  declare -A group_ids=()
+  groups_created=0
+  groups_updated=0
+  while IFS=$'\t' read -r group_path group_attrs; do
+    [[ -z "$group_path" ]] && continue
+    group_name="${group_path##*/}"
+    parent_path="${group_path%/*}"
+    encoded_path="$(jq -rn --arg p "$group_path" '$p | ltrimstr("/") | split("/") | map(@uri) | join("/")')"
+    # No --fields here: kcadm's field filter returns nested maps such as
+    # attributes as {} and would make every group look changed.
+    existing="$(kcadm get "group-by-path/${encoded_path}" -r "${REALM_NAME}" 2>/dev/null \
+      | jq -c '{id, attributes}' 2>/dev/null || true)"
+    [[ -n "$existing" ]] || existing='{}'
+    group_id="$(jq -r '.id // empty' <<<"$existing" 2>/dev/null || true)"
+    if [[ -z "$group_id" ]]; then
+      if [[ -z "$parent_path" ]]; then
+        group_id="$(kcadm create groups -r "${REALM_NAME}" -s "name=${group_name}" -i)"
+      else
+        parent_id="${group_ids[$parent_path]:-}"
+        if [[ -z "$parent_id" ]]; then
+          echo "STEP2 WARN: parent '${parent_path}' missing for group '${group_path}'; skipping."
+          continue
+        fi
+        group_id="$(kcadm create "groups/${parent_id}/children" -r "${REALM_NAME}" -s "name=${group_name}" -i)"
+      fi
+      existing='{"attributes":{}}'
+      groups_created=$((groups_created + 1))
+    fi
+    group_ids[$group_path]="$group_id"
+    merged="$(jq -c --argjson want "$group_attrs" '(.attributes // {}) + $want' <<<"$existing")"
+    current="$(jq -c '.attributes // {}' <<<"$existing")"
+    if [[ "$(jq -S . <<<"$merged")" != "$(jq -S . <<<"$current")" ]]; then
+      jq -n --arg name "$group_name" --argjson attrs "$merged" '{name: $name, attributes: $attrs}' \
+        | kcadm update "groups/${group_id}" -r "${REALM_NAME}" -f - >/dev/null
+      groups_updated=$((groups_updated + 1))
+    fi
+  done < <(jq -r '
+    def flat($prefix): .[] | ($prefix + "/" + .name) as $p
+      | ([$p, ((.attributes // {}) | tojson)] | @tsv), ((.subGroups // []) | flat($p));
+    flat("")' "$STEP2_GROUPS_TREE_FILE")
+  echo "STEP2: groups synced (${#group_ids[@]} in tree, ${groups_created} created, ${groups_updated} attribute updates)."
 else
   echo "STEP2 WARN: groups file not found at ${STEP2_GROUPS_TREE_FILE}; skipping group import."
 fi

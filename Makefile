@@ -12,7 +12,7 @@ UPGRADE_TEST_IMAGE ?= vg_sso-keycloak-upgrade-test:$(UPGRADE_TEST_VERSION)
 UPGRADE_TEST_KEYCLOAK_IMAGE ?= quay.io/keycloak/keycloak:$(UPGRADE_TEST_VERSION)
 SPI_MVN_ARGS ?=
 
-.PHONY: help self-registration-client-setup self-registration-client-secret-rotate apply-branding sync-designations build-spis dev-up dev-reload-spi up down reset ps logs kcadm-login automation-secret automation-client \
+.PHONY: help self-registration-client-setup self-registration-client-secret-rotate apply-branding sync-designations build-spis dev-up dev-reload-spi up down reset ps logs kcadm-login automation-secret automation-client fresh-install-test fresh-install-test-down \
 	logs-all \
 	logs-runtime logs-init \
 	force-step1 force-step2 force-step3 force-step4 force-step5 force-step6 force-step7 force-step7-fgap force-step8 force-step9 force-step10 maintenance audit-export backup full-backup \
@@ -146,6 +146,14 @@ logs-init:
 # master admin from .env. ADMIN_USER=... ADMIN_PASSWORD=... forces a user login.
 kcadm-login:
 	@bash -lc 'set -euo pipefail; get_env() { grep -m1 "^$$1=" .env | cut -d= -f2- || true; }; server="$${KEYCLOAK_URL:-http://localhost:8080}"; config="$${KCADM_CONFIG:-/tmp/kcadm-master-admin.config}"; container="$${CONTAINER_NAME:-vg-keycloak}"; sa_secret="$$(get_env KC_AUTOMATION_CLIENT_SECRET)"; if [[ -z "$${ADMIN_USER:-}" && -n "$$sa_secret" ]]; then sa_client="$$(get_env KC_AUTOMATION_CLIENT_ID)"; sa_client="$${sa_client:-sso-automation}"; realm="$$(get_env KC_NEW_REALM_NAME)"; if docker exec "$$container" /opt/keycloak/bin/kcadm.sh config credentials --server "$$server" --realm "$$realm" --client "$$sa_client" --secret "$$sa_secret" --config "$$config" >/dev/null 2>&1; then echo "kcadm config: $$config (service account $$sa_client, realm $$realm)"; exit 0; fi; echo "WARN: service account $$sa_client login failed (run make automation-client); falling back to master admin" >&2; fi; realm="$${ADMIN_REALM:-master}"; user="$${ADMIN_USER:-$$(get_env KC_MASTER_ADMIN_USER)}"; password="$${ADMIN_PASSWORD:-$$(get_env KC_MASTER_ADMIN_PASSWORD)}"; if [[ -z "$$user" || -z "$$password" ]]; then echo "ERROR: KC_MASTER_ADMIN_USER/KC_MASTER_ADMIN_PASSWORD missing in .env or ADMIN_USER/ADMIN_PASSWORD env" >&2; exit 1; fi; docker exec "$$container" /opt/keycloak/bin/kcadm.sh config credentials --server "$$server" --realm "$$realm" --user "$$user" --password "$$password" --config "$$config"; echo "kcadm config: $$config"'
+
+# Isolated fresh install (step1 -> step10) + marker and forced-rerun idempotency
+# checks. Never touches production (see tests/fresh_install/run.sh).
+fresh-install-test:
+	./tests/fresh_install/run.sh
+
+fresh-install-test-down:
+	@f="$${FRESH_TEST_DIR:-$${XDG_CACHE_HOME:-$$HOME/.cache}/vg_sso-fresh-install-test}/fresh-compose.json"; if [[ -f $$f ]]; then docker compose -f $$f down -v --remove-orphans; rm -f $$f; else docker ps -a --filter name=fresh-vg- -q | xargs -r docker rm -f; docker volume rm vg_sso_fresh_postgres_data vg_sso_fresh_keycloak_data vg_sso_fresh_exports 2>/dev/null || true; docker network rm vg_sso_fresh_default 2>/dev/null || true; fi
 
 automation-secret:
 	./scripts/ensure_automation_secret.sh

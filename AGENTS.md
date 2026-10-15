@@ -240,6 +240,15 @@ docker compose -f docker-compose.yml -f docker-compose.override.yml run --rm -e 
 
 **Do not force init steps on production.** Forced steps re-apply the repo baseline and overwrite manual production changes. For example, step 4 resets the browser flow to `browser-PhoneOTP`, step 2 resets the brute-force limit, and step 5 backfills expiry dates. Use targeted scripts through the maintenance runner instead (e.g. `make maintenance MAINT_CMD='python3 /workspace/scripts/fgap_delegated_consolidate.py --dry-run'`).
 
+What forced re-runs do (verified with `make fresh-install-test`):
+
+- Steps 1, 2, 6, 6-fgap, 7-fgap, 8, 9, and 10 are idempotent. Step 2 syncs the group tree non-destructively (creates missing groups, merges attributes; never deletes groups or memberships) and merges, rather than replaces, the user profile.
+- Steps 3 and 7 recreate their protocol mappers (same config, new IDs).
+- Step 4 rebuilds the `browser-PhoneOTP` flow and its configs. That drops step 5's account-expiry check until step 5 runs again, and rebinds the realm browser flow. **Never force step 4 without step 5**, and never on production.
+- Step 5 only backfills users that have no expiry date. It never overwrites an existing date.
+
+Run `make fresh-install-test` after changing any init step. It builds an isolated stack (`vg_sso_fresh`, Keycloak on `127.0.0.1:28080`), runs the full chain on an empty database, and checks marker re-runs and two forced rounds. It never touches production. Clean up with `make fresh-install-test-down`.
+
 Useful when iterating:
 
 - use `STEP1_FORCE=true` after changing realm bootstrap assumptions
