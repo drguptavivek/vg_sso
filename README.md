@@ -47,6 +47,8 @@ On top of that, the `delegated admin guard SPI` closes the gaps that FGAP alone 
 
 Realm roles define broad responsibilities, FGAP narrows the admin surface, the AppRoles ownership model ties some powers to concrete client ownership, and the custom SPI layer enforces runtime guardrails where native authorization is not sufficient.
 
+One FGAP v2 property shapes the whole design: permissions are evaluated **UNANIMOUSLY**, so a separate realm-wide permission per delegated role makes the roles cancel each other out. Delegated roles therefore share one Users and one Groups permission (`scripts/fgap_delegated_consolidate.py`), and the guard SPI enforces each role's limits. See [`docs/fgap-gotchas.md`](docs/fgap-gotchas.md) before changing any permission.
+
 ### 6. Group-aware token enrichment: who the user is, where they work, what they do, any app-specific roles they need
 
 - The repo includes a custom group-attribute mapper SPI to solve a practical limitation in standard Keycloak token shaping. In this system, users are intentionally placed into multiple organizational groups such as `Departments`, `User Type`, and `IT Roles`. Those memberships tell client applications where the user works, what kind of user they are, and what kind of work they do. 
@@ -189,7 +191,9 @@ Key targets:
 - `make apply-branding` applies local branding assets from `.local/brand-assets`.
 - `make dev-reload-spi` rebuilds/copies SPI JARs into the running Keycloak container and restarts it.
 - `make logs-runtime` focuses on `keycloak` and `postgres`; `make logs-init` focuses on init containers.
-- `make force-step1` through `make force-step9` re-run individual init stages when iterating on bootstrap logic.
+- `make force-step1` through `make force-step9` re-run individual init stages when iterating on bootstrap logic. **Do not use them on production**: they re-apply the repo baseline and overwrite manual changes (for example, the browser flow). Use targeted scripts through `make maintenance` instead.
+- `make automation-client` creates or updates the `sso-automation` service account on an existing deployment (fresh installs get it from step 1). `make automation-secret` generates its secret into `.env` if missing.
+- `make kcadm-login` logs host-side `kcadm` in as the `sso-automation` service account (realm-scoped), falling back to the master admin.
 - `make maintenance` runs an arbitrary command inside the `keycloak-maintenance` container without triggering unrelated init steps.
 - `make audit-export` runs the audit export job and updates the export watermark.
 - `make prod-down` stops the production stack (base compose only).
@@ -267,6 +271,8 @@ The environment is configured through one-shot init containers that run in order
 - auditor setup
 - audit archival/export setup
 
+All steps after step 1, the maintenance runner, and `make kcadm-login` authenticate as the `sso-automation` service account (client credentials, `realm-admin` in the realm). Its secret is generated into `.env` automatically. Human admin accounts can therefore keep 2FA, and no automation depends on a person's password.
+
 The exact implementation is intentionally kept out of this README. Use the step docs if you need to modify one of those stages.
 
 ## Testing
@@ -299,6 +305,7 @@ Test artifacts are written under [`tests/results/`](tests/results/).
   - [`docs/account-expiry-policy.md`](docs/account-expiry-policy.md)
   - [`docs/user-manager-policy.md`](docs/user-manager-policy.md)
   - [`docs/delegated-client-admin-policy.md`](docs/delegated-client-admin-policy.md)
+  - [`docs/fgap-gotchas.md`](docs/fgap-gotchas.md): FGAP v2 pitfalls and how to change permissions safely
   - [`docs/password-phrase-policy.md`](docs/password-phrase-policy.md)
   - [`docs/failure-auth-logging-policy.md`](docs/failure-auth-logging-policy.md)
   - [`docs/auditor-role-policy.md`](docs/auditor-role-policy.md)
