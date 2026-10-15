@@ -56,6 +56,7 @@ Review and set at least:
 - `KC_HOST_LOG_DIR`
 - `KC_FAILURE_LOG_FILE`
 - `AUDIT_EXPORT_*`
+- `KC_AUTOMATION_CLIENT_ID` (default `sso-automation`) and `KC_AUTOMATION_CLIENT_SECRET`. Leave the secret empty: `make prod-up` / `make automation-secret` generate it once and never overwrite it. See [Admin accounts and 2FA](#admin-accounts-and-2fa).
 
 Also review runtime/build settings such as:
 
@@ -144,9 +145,11 @@ Before starting:
 Then run:
 
 ```bash
-docker compose up -d --build
+make prod-up
 docker compose ps
 ```
+
+`make prod-up` generates the automation service account secret into `.env` (if missing), applies branding, builds the SPI JARs, and runs `docker compose up -d --build` on the base stack. If you start with plain `docker compose up -d --build`, run `make automation-secret` first. Otherwise step 1 skips the service account and falls back to the legacy password-based automation mode.
 
 ## What the production start does
 
@@ -197,7 +200,8 @@ Validate at least:
 
 - Keycloak is healthy
 - each required init step completed successfully
-- master and realm admin login work
+- master and realm admin login work (and, after hardening, require 2FA)
+- `make kcadm-login` reports `service account sso-automation`
 - expected branding is visible
 - expected group tree exists
 - expected custom providers and flows are present
@@ -219,6 +223,50 @@ To trigger an audit export manually:
 docker compose run --rm --no-build keycloak-maintenance python3 /workspace/scripts/audit_export_events.py
 ```
 
+## Admin accounts and 2FA
+
+Production has these privileged identities. Only humans log in interactively, and every human admin must have 2FA. Automation never uses a human password.
+
+| Identity | Realm | Kind | Used by | 2FA |
+|---|---|---|---|---|
+| `KC_BOOTSTRAP_ADMIN_USERNAME` | master | temporary setup admin | Keycloak first start, step 1 | n/a: deleted by step 1 |
+| `KC_MASTER_ADMIN_USER` | master | human super-admin | break-glass, master-realm admin | **required** |
+| `KC_NEW_REALM_ADMIN_USER` | target realm | human realm admin | realm administration in the admin console | **required** |
+| `sso-automation` (`service-account-sso-automation`) | target realm | confidential client, client credentials, `realm-admin` | steps 2-10, FGAP scripts, `make maintenance`, `make kcadm-login`, `make automation-client` | n/a (secret in `.env`) |
+| `sso-self-registration` (`service-account-sso-self-registration`) | target realm | confidential client, guard-restricted | `/register` self-registration in the admin console app | n/a (see [`SelfRegistration.md`](SelfRegistration.md)) |
+| `hr-client-admin-console` | target realm | confidential OIDC client | admin console app sign-in; calls run with the signed-in user's token | n/a (users sign in with their own 2FA) |
+
+`sso-automation` and `sso-self-registration` are protected system clients: the guard SPI, the step 6 FGAP deny list, and the admin console's reserved list all block delegated admins from editing them or reading their secrets.
+
+### Fresh install
+
+1. `make prod-up`. Step 1 retires the bootstrap admin and creates `sso-automation` with the secret from `.env`.
+2. Confirm the service account works: `make kcadm-login` must print `service account sso-automation`.
+3. In the **master** admin console, sign in as `KC_MASTER_ADMIN_USER`, then:
+   1. confirm no other master users exist (the bootstrap admin must be gone; delete it if step 1 logged `bootstrap admin retained`);
+   2. change the password from the `.env` value;
+   3. enable 2FA: *Users → `<master admin>` → Required user actions → Configure OTP*, then sign out and back in to enroll the authenticator.
+4. Do the same for `KC_NEW_REALM_ADMIN_USER` in the target realm's admin console.
+5. Put the new master admin password into `.env` (`KC_MASTER_ADMIN_PASSWORD`). It is only needed as a fallback and for a future fresh install, but keep it current.
+6. Re-check automation is unaffected: `make maintenance MAINT_CMD='python3 /workspace/scripts/fgap_delegated_consolidate.py --dry-run'` must run without a `used fallback user` warning.
+
+Once 2FA is on, password-only logins for these humans stop working. That is intended. Nothing automated depends on them.
+
+### Existing deployment (step 1 already ran)
+
+1. `make automation-secret`: adds `KC_AUTOMATION_CLIENT_SECRET` to `.env`.
+2. Deploy the current `custom-delegated-admin-guard-spi` (it lists `sso-automation` as a protected client) **before** creating the client. Use a hot-swap of the JAR plus a Keycloak restart, or `make prod-up`.
+3. `make automation-client`: creates the client and grants `realm-admin`. It must end with `verified service account login and realm access`.
+4. `make kcadm-login`: must print `service account sso-automation`.
+5. Enable 2FA for the master and realm admins as above.
+
+### Rotating the automation secret
+
+- Before the master admin has 2FA: change `KC_AUTOMATION_CLIENT_SECRET` in `.env`, then run `make automation-client`.
+- After: regenerate it in the admin console (*Clients → `sso-automation` → Credentials → Regenerate*), paste the new value into `.env`, then run `make automation-client` to verify.
+
+Service-account `kcadm` sessions are short-lived. If a `kcadm` command returns an empty or odd error, run `make kcadm-login` again.
+
 ## Upgrade and change model
 
 When you change any of the following, rebuild the image and redeploy:
@@ -229,7 +277,13 @@ When you change any of the following, rebuild the image and redeploy:
 - bootstrap scripts in `scripts/`
 - Docker packaging behavior in `Dockerfile`
 
-When you change these, rerun the affected init step or redeploy with the appropriate force flag:
+On a fresh or disposable environment, rerun the affected init step with its force flag after changing any of the following. **On production, do not force init steps.** They re-apply the repo baseline and overwrite manual production changes; for example, step 4 resets the browser flow to `browser-PhoneOTP` and step 2 resets the brute-force limit. Use the targeted, idempotent scripts through the maintenance runner (all support `--dry-run`):
+
+- delegated admin permissions: `make maintenance MAINT_CMD='python3 /workspace/scripts/fgap_delegated_consolidate.py'` (read [`fgap-gotchas.md`](fgap-gotchas.md) first)
+- user profile dropdowns: `make maintenance MAINT_CMD='python3 /workspace/scripts/apply_profile_dropdowns.py'`
+- automation service account: `make automation-client`
+
+Areas that are applied by init steps:
 
 - group import payload
 - realm baseline scripts
@@ -247,3 +301,6 @@ When you change these, rerun the affected init step or redeploy with the appropr
 - [`account-expiry-policy.md`](account-expiry-policy.md)
 - [`user-manager-policy.md`](user-manager-policy.md)
 - [`delegated-client-admin-policy.md`](delegated-client-admin-policy.md)
+- [`fgap-gotchas.md`](fgap-gotchas.md)
+- [`STEP_1.md`](STEP_1.md)
+- [`SelfRegistration.md`](SelfRegistration.md)
