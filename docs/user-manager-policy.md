@@ -50,16 +50,21 @@ The `user-manager` realm role is created with three `realm-management` client ro
 
 ### 3.2 FGAP v2 (Fine-Grained Authorization Policies v2)
 
-Additional scoped permissions are granted via `admin-permissions` client Authorization Services (`scripts/step2_fgap_api_setup.py`):
+Scoped permissions are granted via the `admin-permissions` client Authorization Services (`scripts/fgap_delegated_consolidate.py`, called by the step 2/6/7 FGAP scripts):
 
 | Resource | Scopes granted | Permission name |
 |---|---|---|
-| `Users` | `view`, `manage`, `manage-group-membership` | `perm-users-user-manager` |
-| `Groups` | `view`, `view-members`, `manage-membership`, `manage-members` | `perm-groups-user-manager-readonly` |
+| `Users` | `view`, `manage-group-membership`, `manage`, `reset-password` | `perm-users-delegated-shared` |
+| `Groups` | `view`, `view-members`, `manage-membership`, `manage` | `perm-groups-delegated-shared` |
 
-**Policy:** `policy-user-manager` (role policy, POSITIVE logic, requires `user-manager` role)
+**Policy:** `policy-users-delegated-any` (role policy, satisfied by ANY of `user-manager`, `client-manager`, `group-manager-fgap`, `delegated-client-admin-base`).
 
-The `manage` scope on `Users` allows creating and editing user records. The absence of any `manage` scope on `Groups` at the resource level means `user-manager` cannot create or delete groups — only assign existing users to existing groups.
+FGAP v2 evaluates all realm-wide permissions on a resource UNANIMOUSLY. Separate per-role permissions therefore cancel each other out: each role's own permission PERMITs while the others DENY. That bug made `user-manager` edits fail with 403 until 2026-10-15. All delegated roles now share one Users and one Groups permission, and `custom-delegated-admin-guard-spi` enforces the per-role limits:
+
+- Only `user-manager` may create, edit, disable, or reset credentials for users. Other delegated roles may only change group membership.
+- A `user-manager` without another delegated role may assign and remove membership in existing groups but cannot create, rename, move, or delete groups. AppRoles roots stay protected.
+
+`manage-members` (edit every user inside a group) is deliberately not granted to any delegated role.
 
 ### 3.3 What is NOT granted
 

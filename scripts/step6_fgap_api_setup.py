@@ -233,9 +233,9 @@ def ensure_scope_permission(keycloak_url, token, realm, mgmt_client_id,
     return res.json()['id']
 
 
-def consolidate_users_permissions(keycloak_url, token, realm):
-    """Shared delegated Users permission; removes conflicting per-role ones."""
-    from fgap_users_consolidate import Admin, consolidate
+def consolidate_delegated_permissions(keycloak_url, token, realm):
+    """Shared delegated Users/Groups permissions; removes conflicting per-role ones."""
+    from fgap_delegated_consolidate import Admin, consolidate
     consolidate(Admin(keycloak_url, realm, token, dry_run=False))
 
 
@@ -387,22 +387,12 @@ def main():
     #    administrator. FGAP grants the operation globally; the delegated
     #    admin guard confines client-manager membership writes to AppRoles
     #    application roots.
-    ensure_scope_permission(
-        KC_URL, token, REALM, mgmt_id,
-        perm_name='perm-groups-client-manager-membership',
-        resource_type='Groups',
-        scope_names=['view', 'view-members', 'manage-membership'],
-        policy_ids=[policy_allow_id],
-        resource_ids=None
-    )
-    note("✅ Groups view+membership permission set for client-manager")
-
-    # The Users-side scope is required by PUT/DELETE
-    # /users/{userId}/groups/{groupId}. It does not grant profile edits.
-    # It comes from the shared delegated permission: per-role realm-wide Users
-    # permissions cancel each other out under FGAP v2's UNANIMOUS strategy.
-    consolidate_users_permissions(KC_URL, token, REALM)
-    note("✅ Users view+manage-group-membership via shared delegated permission")
+    #    The Users-side scope is required by PUT/DELETE
+    #    /users/{userId}/groups/{groupId}. It does not grant profile edits.
+    #    Both come from shared delegated permissions: per-role realm-wide
+    #    permissions cancel each other out under FGAP v2's UNANIMOUS strategy.
+    consolidate_delegated_permissions(KC_URL, token, REALM)
+    note("✅ Users/Groups membership via shared delegated permissions")
 
     # ── Step 9: Register the delegated-admin-guard event listener ──
     #    The delegated-admin-guard SPI enforces rules that FGAP v2 scopes cannot:

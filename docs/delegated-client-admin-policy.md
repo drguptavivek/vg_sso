@@ -79,14 +79,17 @@ Configured through bootstrap scripts against `admin-permissions`.
 |---|---|---|---|
 | `perm-client-manager-global` | `Clients` | `view`, `manage` | `policy-client-manager-allow` |
 | `perm-client-manager-deny-system` | `Clients` | `manage` (NEGATIVE) | `policy-client-manager-deny` |
-| `perm-users-client-manager-view` | `Users` | `view` | `policy-client-manager-allow` |
 
-#### Step 7 (`delegated-client-admin-base`) permissions
+#### Shared delegated Users/Groups permissions (steps 2, 6, 7)
+
+FGAP v2 evaluates realm-wide permissions UNANIMOUSLY, so per-role Users/Groups permissions cancel each other out. `scripts/fgap_delegated_consolidate.py` replaces them with shared ones:
 
 | Permission | Resource | Scopes | Policy |
 |---|---|---|---|
-| `perm-groups-delegated-client-admin-base-manage` | `Groups` | `manage`, `manage-membership`, `view`, `view-members` | `policy-delegated-client-admin-base-allow` |
-| `perm-users-delegated-client-admin-base` | `Users` | `view`, `manage-group-membership` | `policy-delegated-client-admin-base-allow` |
+| `perm-users-delegated-shared` | `Users` | `view`, `manage-group-membership`, `manage`, `reset-password` | `policy-users-delegated-any` |
+| `perm-groups-delegated-shared` | `Groups` | `view`, `view-members`, `manage-membership`, `manage` | `policy-users-delegated-any` |
+
+`custom-delegated-admin-guard-spi` enforces the per-role limits. Client-managers may only change direct membership of `AppRoles/{clientId}` (appointing application admins). Application admins may only manage groups and membership inside their own AppRoles subtree. Only `user-manager` may create or modify user accounts.
 
 Notes:
 

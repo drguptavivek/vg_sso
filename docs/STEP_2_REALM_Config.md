@@ -133,6 +133,12 @@ Logic: Positive
 
 #### Permissions associated with the Policy created above
 
+> **Superseded (2026-10-15):** do not create the per-role permissions below by hand.
+> FGAP v2 evaluates them UNANIMOUSLY, so they cancel each other out across delegated roles.
+> `scripts/fgap_delegated_consolidate.py` (run by the step 2/6/7 FGAP scripts) creates
+> `perm-users-delegated-shared` and `perm-groups-delegated-shared` instead. See
+> `docs/user-manager-policy.md` §3.2. The original manual steps are kept for history.
+
 USER PERMISSIONS - Go to realm > Permissions -> Create Permission  > Users 
  - Name: `perm-users-user-manager`
  - Description: Allow user-manager to create/edit users and assign group membership

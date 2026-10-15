@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Consolidate FGAP v2 permissions on the Users resource type.
+"""Consolidate FGAP v2 permissions on the Users and Groups resource types.
 
 FGAP v2 locks the admin-permissions resource server to the UNANIMOUS decision
-strategy: every permission that applies to a user must PERMIT. Separate
-realm-wide Users permissions per delegated role therefore cancel each other
+strategy: every permission that applies to a user or group must PERMIT.
+Separate realm-wide permissions per delegated role therefore cancel each other
 out. For example, a user-manager is denied `manage` because the client-manager,
 group-manager-fgap, and delegated-client-admin-base permissions on the same
 resource evaluate to DENY for them.
@@ -12,11 +12,19 @@ Target shape (idempotent):
   - policy-users-delegated-any: role policy satisfied by ANY delegated admin
     role that exists (user-manager, client-manager, group-manager-fgap,
     delegated-client-admin-base).
-  - perm-users-delegated-shared: Users [view, manage-group-membership] for
-    that policy.
-  - perm-users-user-manager: Users [manage, reset-password] for
-    policy-user-manager only (create/edit/disable users, reset credentials).
-  - Legacy per-role Users permissions are removed.
+  - perm-users-delegated-shared: Users [view, manage-group-membership,
+    manage, reset-password] for that policy. A user-manager-only permission
+    would DENY group membership for every other role, so user lifecycle
+    writes (create/edit/disable/credentials) are restricted to user-manager
+    by custom-delegated-admin-guard-spi instead.
+  - perm-groups-delegated-shared: Groups [view, view-members,
+    manage-membership, manage] for that policy. Per-role limits on group
+    structure (user-manager: none; client-manager/app admins: own AppRoles
+    subtree; group-manager: everything except AppRoles roots) are enforced by
+    custom-delegated-admin-guard-spi, which MUST be deployed first.
+    `manage-members` (edit every user inside a group) is deliberately not
+    granted.
+  - Legacy per-role Users and Groups permissions are removed.
 
 Safe to re-run. Use --dry-run to print the plan without changing anything.
 """
@@ -34,19 +42,23 @@ urllib3.disable_warnings(InsecureRequestWarning)
 DELEGATED_ROLES = ["user-manager", "client-manager", "group-manager-fgap", "delegated-client-admin-base"]
 SHARED_POLICY = "policy-users-delegated-any"
 SHARED_PERMISSION = "perm-users-delegated-shared"
-SHARED_SCOPES = ["view", "manage-group-membership"]
-USER_MANAGER_POLICY = "policy-user-manager"
-USER_MANAGER_PERMISSION = "perm-users-user-manager"
-USER_MANAGER_SCOPES = ["manage", "reset-password"]
+SHARED_SCOPES = ["view", "manage-group-membership", "manage", "reset-password"]
+GROUPS_SHARED_PERMISSION = "perm-groups-delegated-shared"
+GROUPS_SHARED_SCOPES = ["view", "view-members", "manage-membership", "manage"]
 LEGACY_PERMISSIONS = [
+    "perm-users-user-manager",
     "perm-users-group-manager-fgap",
     "perm-users-client-manager-view",
     "perm-users-delegated-client-admin-base",
+    "perm-groups-user-manager-readonly",
+    "perm-groups-group-manager-fgap",
+    "perm-groups-client-manager-membership",
+    "perm-groups-delegated-client-admin-base-manage",
 ]
 
 
 def note(message):
-    print(f"FGAP-USERS: {message}", flush=True)
+    print(f"FGAP-DELEGATED: {message}", flush=True)
 
 
 class Admin:
@@ -130,10 +142,11 @@ def ensure_shared_policy(admin):
     return existing["id"]
 
 
-def ensure_scope_permission(admin, name, description, scope_names, policy_name, policy_id):
+def ensure_scope_permission(admin, name, description, scope_names, policy_name, policy_id,
+                            resource_type="Users"):
     payload = {
         "name": name, "description": description, "type": "scope", "logic": "POSITIVE",
-        "decisionStrategy": "UNANIMOUS", "resourceType": "Users", "resources": [],
+        "decisionStrategy": "UNANIMOUS", "resourceType": resource_type, "resources": [],
         "scopes": admin.scope_ids(scope_names), "policies": [policy_id] if policy_id else [],
     }
     existing = admin.by_name("permission", name)
@@ -152,16 +165,14 @@ def ensure_scope_permission(admin, name, description, scope_names, policy_name, 
 def consolidate(admin):
     shared_policy_id = ensure_shared_policy(admin)
     ensure_scope_permission(admin, SHARED_PERMISSION,
-                            "Users view + group membership for any delegated admin role",
+                            "Users access for any delegated admin role; lifecycle writes limited to "
+                            "user-manager by delegated-admin-guard",
                             SHARED_SCOPES, SHARED_POLICY, shared_policy_id)
 
-    um_policy = admin.by_name("policy", USER_MANAGER_POLICY)
-    if um_policy is None:
-        note(f"{USER_MANAGER_POLICY} not present; skipping {USER_MANAGER_PERMISSION}")
-    else:
-        ensure_scope_permission(admin, USER_MANAGER_PERMISSION,
-                                "Allow user-manager to create/edit/disable users and reset credentials",
-                                USER_MANAGER_SCOPES, USER_MANAGER_POLICY, um_policy["id"])
+    ensure_scope_permission(admin, GROUPS_SHARED_PERMISSION,
+                            "Groups view + membership + structure for any delegated admin role; "
+                            "per-role limits enforced by delegated-admin-guard",
+                            GROUPS_SHARED_SCOPES, SHARED_POLICY, shared_policy_id, resource_type="Groups")
 
     for name in LEGACY_PERMISSIONS:
         legacy = admin.by_name("permission", name)

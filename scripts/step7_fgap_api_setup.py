@@ -164,9 +164,9 @@ def ensure_scope_permission(keycloak_url, token, realm, mgmt_client_id,
     return res.json()['id']
 
 
-def consolidate_users_permissions(keycloak_url, token, realm):
-    """Shared delegated Users permission; removes conflicting per-role ones."""
-    from fgap_users_consolidate import Admin, consolidate
+def consolidate_delegated_permissions(keycloak_url, token, realm):
+    """Shared delegated Users/Groups permissions; removes conflicting per-role ones."""
+    from fgap_delegated_consolidate import Admin, consolidate
     consolidate(Admin(keycloak_url, realm, token, dry_run=False))
 
 
@@ -227,28 +227,13 @@ def main():
     )
     note(f"policy-delegated-client-admin-base-allow id: {policy_allow_id}")
 
-    # ── Step 4: Groups permission for delegated-client-admin-base ──
-    #    manage:            create/update/delete groups (includes creating subgroups)
-    #    manage-membership: add/remove members from groups
-    #    view:              view group details
-    #    view-members:      list group members
-    ensure_scope_permission(
-        KC_URL, token, REALM, mgmt_id,
-        perm_name='perm-groups-delegated-client-admin-base-manage',
-        resource_type='Groups',
-        scope_names=['manage', 'manage-membership', 'view', 'view-members'],
-        policy_ids=[policy_allow_id],
-        resource_ids=None  # all groups
-    )
-    note("✅ Groups manage+membership permission set for delegated-client-admin-base")
-
-    # ── Step 5: Users permission for delegated-client-admin-base ──
-    #    view:                  browse the user directory (needed to find users to add)
-    #    manage-group-membership: add/remove users from groups via Users API
-    #    Both come from the shared delegated permission: per-role realm-wide Users
-    #    permissions cancel each other out under FGAP v2's UNANIMOUS strategy.
-    consolidate_users_permissions(KC_URL, token, REALM)
-    note("✅ Users view+manage-group-membership via shared delegated permission")
+    # ── Step 4/5: Groups + Users permissions for delegated-client-admin-base ──
+    #    Groups manage/manage-membership/view/view-members (guard confines writes
+    #    to the actor's own AppRoles subtree) and Users view/manage-group-membership
+    #    come from shared delegated permissions: per-role realm-wide permissions
+    #    cancel each other out under FGAP v2's UNANIMOUS strategy.
+    consolidate_delegated_permissions(KC_URL, token, REALM)
+    note("✅ Groups/Users membership via shared delegated permissions")
 
     note("")
     note("═══════════════════════════════════════════════════")

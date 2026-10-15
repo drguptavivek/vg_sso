@@ -47,8 +47,11 @@ import java.util.stream.Collectors;
  *  4. PUT    /admin/realms/{realm}/client-scopes/{id}[/...]   → 403
  *  5. DELETE /admin/realms/{realm}/client-scopes/{id}[/...]   → 403
  *
- * Applies ONLY to users with the 'client-manager' realm role who do NOT
+ * Rules 1-5 apply ONLY to users with the 'client-manager' realm role who do NOT
  * also hold 'realm-admin' or manage-realm (from realm-management client).
+ *
+ * user-manager (without any other delegated role): POST /groups and any
+ * mutation of /groups/{id}[/**] → 403. Membership changes stay allowed.
  */
 @Provider
 @Priority(Priorities.AUTHORIZATION + 10)  // after auth, before business logic
@@ -112,6 +115,11 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
     // group(1) = target group UUID, group(2) = sub-resource path (null for group root).
     private static final Pattern GROUP_ANY_PATH = Pattern.compile(
         "^/admin/realms/[^/]+/groups/([^/]+)(/.*)?$"
+    );
+
+    // POST /admin/realms/{realm}/groups (top-level group creation)
+    private static final Pattern GROUP_COLLECTION_PATH = Pattern.compile(
+        "^/admin/realms/[^/]+/groups/?$"
     );
 
     // PUT/DELETE /admin/realms/{realm}/users/{userId}/groups/{groupId}
@@ -353,6 +361,45 @@ public class DelegatedAdminGuardFilter implements ContainerRequestFilter {
                 }
                 return;
             }
+        }
+
+        // All delegated roles hold the shared Users `manage`/`reset-password`
+        // scopes only because FGAP v2 is UNANIMOUS (a user-manager-only
+        // permission would DENY group membership for every other role).
+        // User lifecycle writes (create, edit, disable, credentials, actions
+        // email, logout) therefore stay user-manager only; other delegated
+        // roles may change group membership and nothing else on users.
+        boolean isDelegatedActor = isGroupManager || isClientManager || hasPcaBase || isPca;
+        boolean isUserLifecycleMutation = isMutate
+            && USER_ANY_PATH.matcher(path).matches()
+            && !isUserGroupMembershipPath;
+        if (!isUserManager && isDelegatedActor && isUserLifecycleMutation) {
+            LOG.warnf(
+                "DELEGATED_ADMIN_GUARD_FILTER: Blocking non-user-manager user mutation %s path=%s user=%s realm=%s",
+                method, path, actor.getUsername(), realm.getName()
+            );
+            ctx.abortWith(forbidden(
+                "Only user managers may create or modify user accounts. Contact a user manager."
+            ));
+            return;
+        }
+
+        // user-manager holds the shared delegated Groups `manage` scope only
+        // because FGAP v2 is UNANIMOUS (per-role realm-wide permissions cancel
+        // each other out). It may change memberships, never group structure.
+        // Actors that also hold another delegated role keep that role's rules.
+        boolean isGroupStructureMutation = isGroupPath
+            || (isMutate && GROUP_COLLECTION_PATH.matcher(path).matches());
+        if (isUserManager && !isGroupManager && !isClientManager && !hasPcaBase && !isPca
+                && isGroupStructureMutation) {
+            LOG.warnf(
+                "DELEGATED_ADMIN_GUARD_FILTER: Blocking user-manager group structure %s path=%s user=%s realm=%s",
+                method, path, actor.getUsername(), realm.getName()
+            );
+            ctx.abortWith(forbidden(
+                "User managers may assign or remove group membership but cannot create, rename, move, or delete groups."
+            ));
+            return;
         }
 
         if (isUserManager && isUserGroupMembershipPath) {
